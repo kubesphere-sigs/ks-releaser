@@ -1,0 +1,64 @@
+# Official documentation at http://goreleaser.com
+project_name: ks-releaser
+builds:
+  - env:
+      - CGO_ENABLED=0
+    id: "ks-releaser"
+    binary: ks-releaser
+    main: ./main.go
+    goarch:
+      - amd64
+      - arm64
+    goos:
+      - windows
+      - linux
+      - darwin
+    hooks:
+      post:
+        - upx "{{ .Path }}"
+    ldflags:
+      - -X github.com/linuxsuren/cobra-extension/version.version={{.Version}}
+      - -X github.com/linuxsuren/cobra-extension/version.commit={{.ShortCommit}}
+      - -X github.com/linuxsuren/cobra-extension/version.date={{.Date}}
+      - -w
+      - -s
+dist: bin
+archives:
+  - name_template: "{{ .Name }}-{{ .Os }}-{{ .Arch }}"
+    id: "ks-releaser"
+    replacements:
+      darwin: darwin
+      linux: linux
+      windows: windows
+      amd64: amd64
+      arm64: arm64
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - README.md
+checksum:
+  name_template: 'checksums.txt'
+snapshot:
+  name_template: "{{ .Tag }}-next-{{.ShortCommit}}"
+changelog:
+  skip: true
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+dockers:
+  - goos: linux
+    goarch: amd64
+    image_templates:
+      - "ghcr.io/kubesphere-sigs/ks-releaser:latest"
+      - "ghcr.io/kubesphere-sigs/ks-releaser:{{.Tag}}"
+    build_flag_templates:
+      - "--pull"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.source=https://github.com/kubesphere-sigs/ks-releaser"
+      - "--platform=linux/amd64"

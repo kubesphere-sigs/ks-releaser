@@ -1,0 +1,12 @@
+apiVersion: devops.kubesphere.io/v1alpha1
+kind: Releaser
+metadata:
+  name: releaser-sample
+spec:
+  repositories:
+    - name: test
+      address: https://gitee.com/linuxsuren/test
+      branch: master
+  secret:
+    name: test-git
+    namespace: default
