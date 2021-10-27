@@ -1,0 +1,25 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  creationTimestamp: null
+  labels:
+    app: ks-releaser
+  name: ks-releaser
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ks-releaser
+  strategy: {}
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: ks-releaser
+    spec:
+      containers:
+        - image: ghcr.io/kubesphere-sigs/ks-releaser:latest
+          name: server
+          resources: {}
+status: {}
