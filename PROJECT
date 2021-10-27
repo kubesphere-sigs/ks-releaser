@@ -1,0 +1,20 @@
+domain: kubesphere.io
+layout:
+- go.kubebuilder.io/v3
+projectName: ks-releaser
+repo: github.com/kubesphere-sigs/ks-releaser
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: kubesphere.io
+  group: devops
+  kind: Releaser
+  path: github.com/kubesphere-sigs/ks-releaser/api/v1alpha1
+  version: v1alpha1
+  webhooks:
+    defaulting: true
+    validation: true
+    webhookVersion: v1
+version: "3"
