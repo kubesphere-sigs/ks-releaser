@@ -36,6 +36,37 @@ spec:
           spec:
             description: ReleaserSpec defines the desired state of Releaser
             properties:
+              gitOps:
+                description: GitOps indicates to integrate with GitOps
+                properties:
+                  enable:
+                    type: boolean
+                  repository:
+                    description: Repository represents a git repository
+                    properties:
+                      action:
+                        description: Action indicates the action once the request
+                          phase to be ready
+                        type: string
+                      address:
+                        type: string
+                      branch:
+                        type: string
+                      message:
+                        type: string
+                      name:
+                        type: string
+                      provider:
+                        description: 'Provider represents a git provider, such as:
+                          GitHub, Gitlab'
+                        type: string
+                      version:
+                        type: string
+                    required:
+                    - address
+                    - name
+                    type: object
+                type: object
               phase:
                 description: Phase is the stage of a release request
                 type: string
@@ -50,6 +81,8 @@ spec:
                     address:
                       type: string
                     branch:
+                      type: string
+                    message:
                       type: string
                     name:
                       type: string

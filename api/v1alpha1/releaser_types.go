@@ -33,6 +33,7 @@ type ReleaserSpec struct {
 	Phase        Phase              `json:"phase,omitempty"`
 	Version      string             `json:"version,omitempty"`
 	Repositories []Repository       `json:"repositories,omitempty"`
+	GitOps       *GitOps            `json:"gitOps,omitempty"`
 	Secret       v1.SecretReference `json:"secret,omitempty"`
 }
 
@@ -44,6 +45,8 @@ const (
 	PhaseDraft Phase = "draft"
 	// PhaseReady indicates this request is ready to release
 	PhaseReady Phase = "ready"
+	// PhaseDone indicates this request was done
+	PhaseDone Phase = "done"
 )
 
 // Repository represents a git repository
@@ -53,7 +56,14 @@ type Repository struct {
 	Address  string   `json:"address"`
 	Branch   string   `json:"branch,omitempty"`
 	Version  string   `json:"version,omitempty"`
+	Message  string   `json:"message,omitempty"`
 	Action   Action   `json:"action,omitempty"`
+}
+
+// GitOps indicates to integrate with GitOps
+type GitOps struct {
+	Enable     bool       `json:"enable,omitempty"`
+	Repository Repository `json:"repository,omitempty"`
 }
 
 // Provider represents a git provider, such as: GitHub, Gitlab
@@ -96,9 +106,11 @@ type Condition struct {
 // Releaser is the Schema for the releasers API
 type Releaser struct {
 	metav1.TypeMeta   `json:",inline"`
+	// +optional
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	Spec   ReleaserSpec   `json:"spec,omitempty"`
+	// +optional
 	Status ReleaserStatus `json:"status,omitempty"`
 }
 
