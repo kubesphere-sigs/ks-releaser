@@ -22,14 +22,10 @@ spec:
       labels:
         control-plane: controller-manager
     spec:
-      securityContext:
-        runAsNonRoot: true
+#      securityContext:
+#        runAsNonRoot: true
       containers:
-      - command:
-        - /manager
-        args:
-        - --leader-elect
-        image: controller:latest
+      - image: controller:latest
         name: manager
         securityContext:
           allowPrivilegeEscalation: false
@@ -48,7 +44,7 @@ spec:
         resources:
           limits:
             cpu: 100m
-            memory: 30Mi
+            memory: 60Mi
           requests:
             cpu: 100m
             memory: 20Mi

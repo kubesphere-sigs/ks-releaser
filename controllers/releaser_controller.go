@@ -20,18 +20,20 @@ import (
 	"context"
 	"fmt"
 	"github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/transport"
 	"golang.org/x/crypto/ssh"
 	githttp "gopkg.in/src-d/go-git.v4/plumbing/transport/http"
 	gitssh "gopkg.in/src-d/go-git.v4/plumbing/transport/ssh"
+	"io/ioutil"
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"net/url"
 	"os"
 	"path"
+	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -69,11 +71,18 @@ func (r *ReleaserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 		return
 	}
 	spec := releaser.Spec
-
-	if spec.Phase == devopsv1alpha1.PhaseDraft {
+	if spec.Phase != devopsv1alpha1.PhaseReady {
 		return
 	}
 
+	if !r.needToUpdate(ctx, releaser) {
+		return
+	}
+
+	//if err = r.Get(ctx, req.NamespacedName, releaser); err != nil {
+	//	err = client.IgnoreNotFound(err)
+	//	return
+	//}
 	secret := &v1.Secret{}
 	if err = r.Get(ctx, types.NamespacedName{
 		Namespace: spec.Secret.Namespace,
@@ -83,11 +92,75 @@ func (r *ReleaserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 	}
 
 	var errSlice = ErrorSlice{}
+	copiedReleaser := releaser.DeepCopy()
 	for i, _ := range spec.Repositories {
-		errSlice.append(release(spec.Repositories[i], secret))
+		repo := spec.Repositories[i]
+		releaseRrr := release(spec.Repositories[i], secret)
+		var condition devopsv1alpha1.Condition
+		if releaseRrr == nil {
+			condition = devopsv1alpha1.Condition{
+				RepositoryName: repo.Name,
+				Status:         "success",
+				Message:        "success",
+			}
+		} else {
+			errSlice = errSlice.append(releaseRrr)
+			condition = devopsv1alpha1.Condition{
+				RepositoryName: repo.Name,
+				Status:         "failed",
+				Message:        releaseRrr.Error(),
+			}
+		}
+		addCondition(copiedReleaser, condition)
 	}
-	err = errSlice.ToError()
+
+	if err = errSlice.ToError(); err == nil {
+		copiedReleaser.Status.CompletionTime = &metav1.Time{Time: time.Now()}
+	} else {
+		result = ctrl.Result{
+			RequeueAfter: time.Second * 5,
+		}
+	}
+
+	r.markAsDone(secret, copiedReleaser)
+	if updateErr := r.Status().Update(ctx, copiedReleaser); updateErr == nil {
+		r.updateHash(ctx, copiedReleaser)
+	} else {
+		fmt.Println(updateErr)
+	}
 	return
+}
+
+// addCondition adds or replaces a condition
+func addCondition(releaser *devopsv1alpha1.Releaser, condition devopsv1alpha1.Condition) {
+	if condition.RepositoryName == "" {
+		return
+	}
+
+	for i, _ := range releaser.Status.Conditions {
+		item := releaser.Status.Conditions[i]
+		if item.RepositoryName == condition.RepositoryName {
+			releaser.Status.Conditions[i] = condition
+			return
+		}
+	}
+	releaser.Status.Conditions = append(releaser.Status.Conditions, condition)
+}
+
+func (r *ReleaserReconciler) needToUpdate(ctx context.Context, releaser *devopsv1alpha1.Releaser) bool {
+	hash := releaser.Annotations["releaser.devops.kubesphere.io/hash"]
+	newHash := ComputeHash(releaser.Spec)
+	if hash == "" {
+		r.updateHash(ctx, releaser)
+		return true
+	}
+	return hash != newHash
+}
+
+func (r *ReleaserReconciler) updateHash(ctx context.Context, releaser *devopsv1alpha1.Releaser) {
+	newHash := ComputeHash(releaser.Spec)
+	releaser.Annotations["releaser.devops.kubesphere.io/hash"] = newHash
+	_ = r.Update(ctx, releaser)
 }
 
 func release(repo devopsv1alpha1.Repository, secret *v1.Secret) (err error) {
@@ -98,7 +171,10 @@ func release(repo devopsv1alpha1.Repository, secret *v1.Secret) (err error) {
 		return
 	}
 
-	if _, err = setTag(gitRepo, repo.Version, "sss"); err != nil {
+	if repo.Message == "" {
+		repo.Message = "released by ks-releaser"
+	}
+	if _, err = setTag(gitRepo, repo.Version, repo.Message); err != nil {
 		return
 	}
 
@@ -132,6 +208,15 @@ func clone(gitRepo, branch string, auth transport.AuthMethod, cacheDir string) (
 			var wd *git.Worktree
 
 			if wd, err = repo.Worktree(); err == nil {
+				if err = wd.Checkout(&git.CheckoutOptions{
+					Branch: plumbing.NewBranchReferenceName(branch),
+					Create: false,
+					Force:  true,
+				}); err != nil {
+					err = fmt.Errorf("unable to checkout git branch: %s", branch)
+					return
+				}
+
 				if err = wd.Pull(&git.PullOptions{
 					Progress:      os.Stdout,
 					ReferenceName: plumbing.NewBranchReferenceName(branch),
@@ -191,6 +276,11 @@ func setTag(r *git.Repository, tag, message string) (bool, error) {
 		return false, err
 	}
 	_, err = r.CreateTag(tag, h.Hash(), &git.CreateTagOptions{
+		Tagger: &object.Signature{
+			Name:  "ks-releaser",
+			Email: "linuxsuren@gmail.com",
+			When:  time.Time{},
+		},
 		Message: message,
 	})
 
@@ -205,7 +295,7 @@ func pushTags(r *git.Repository, auth transport.AuthMethod) (err error) {
 	po := &git.PushOptions{
 		RemoteName: "origin",
 		Progress:   os.Stdout,
-		RefSpecs:   []config.RefSpec{config.RefSpec("refs/tags/*:refs/tags/*")},
+		//RefSpecs:   []config.RefSpec{config.RefSpec("refs/tags/*:refs/tags/*")},
 		Auth:       auth,
 	}
 	if err = r.Push(po); err != nil {
@@ -236,4 +326,60 @@ func (r *ReleaserReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&devopsv1alpha1.Releaser{}).
 		Complete(r)
+}
+
+func (r *ReleaserReconciler) markAsDone(secret *v1.Secret, releaser *devopsv1alpha1.Releaser) {
+	gitOps := releaser.Spec.GitOps
+	if gitOps == nil || !gitOps.Enable {
+		releaser.Spec.Phase = devopsv1alpha1.PhaseDone
+		return
+	}
+
+	repo := gitOps.Repository
+	if gitRepo, err := clone(repo.Address, repo.Branch, getAuth(secret), "tmp"); err == nil {
+		var gitRepoURL *url.URL
+		if gitRepoURL, err = url.Parse(repo.Address); err != nil {
+			return
+		}
+
+		dir := path.Join(".", gitRepoURL.Path)
+		filePath := path.Join(dir, fmt.Sprintf("%s.yaml", releaser.Name))
+
+		if data, err := ioutil.ReadFile(filePath); err == nil {
+			data, err = updateReleaserAsYAML(data, func(releaser *devopsv1alpha1.Releaser) {
+				releaser.Spec.Phase = devopsv1alpha1.PhaseDone
+			})
+			if err == nil {
+				if err := ioutil.WriteFile(filePath, data, 0644); err != nil {
+					fmt.Println("failed to write file", filePath)
+				} else {
+					if err := addAndCommit(gitRepo); err == nil {
+						err = pushTags(gitRepo, getAuth(secret))
+					}
+				}
+			}
+		}
+		fmt.Println(err)
+	}
+}
+
+func addAndCommit(repo *git.Repository) (err error){
+	var w *git.Worktree
+	if w, err = repo.Worktree(); err == nil {
+		_, _ = w.Add(".")
+		var commit plumbing.Hash
+		commit, err = w.Commit("example go-git commit", &git.CommitOptions{
+			All: true,
+			Author: &object.Signature{
+				Name:  "John Doe",
+				Email: "john@doe.org",
+				When:  time.Now(),
+			},
+		})
+
+		if err == nil {
+			_, err = repo.CommitObject(commit)
+		}
+	}
+	return
 }
