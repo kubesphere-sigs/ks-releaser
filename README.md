@@ -4,10 +4,15 @@ This project aims to help to release a project which especially has multiple git
 
 Install it to a Kubernetes cluster. You can use [kubekey](https://github.com/kubesphere/kubekey) or [ks CLI](https://github.com/kubesphere-sigs/ks).
 
+### For local environment
+
 ```shell
-kubectl apply -f https://raw.githubusercontent.com/kubesphere-sigs/ks-releaser/master/config/crd/bases/devops.kubesphere.io_releasers.yaml
-kubectl apply -f https://raw.githubusercontent.com/kubesphere-sigs/ks-releaser/master/config/samples/deployment.yaml
+make deploy
 ```
+
+### For production environment
+
+TBD
 
 ## How to use
 
@@ -40,4 +45,28 @@ spec:
     namespace: default
 ```
 
-Wait for a while, you can check your git repositories to see if there a new git tag over there.
+### Integration with ArgoCD
+
+Please provide the corresponding git repository if you want to use GitOps way.
+```yaml
+apiVersion: devops.kubesphere.io/v1alpha1
+kind: Releaser
+metadata:
+  name: releaser-sample
+spec:
+  gitOps:
+  enable: true
+  repository:
+    address: https://gitee.com/linuxsuren/linuxsuren-releaser
+    branch: master
+    name: test
+  repositories:
+    - name: test
+      address: https://gitee.com/linuxsuren/test
+      branch: master
+  secret:
+    name: test-git
+    namespace: default
+```
+
+Wait for a while, you can check your git repositories to see if there is a new git tag over there.
