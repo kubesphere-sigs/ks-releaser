@@ -11,6 +11,6 @@ configMapGenerator:
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 images:
-- digest: sha256:d99aae63c6d56ba19caee43bcdda325f37f131bb324b5afa025e183f5f1a727f
-  name: controller
-  newName: ghcr.io/kubesphere-sigs/ks-releaser:latest
+- name: controller
+  newName: ghcr.io/kubesphere-sigs/ks-releaser
+  newTag: latest
