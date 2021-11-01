@@ -1,5 +1,11 @@
 This project aims to help to release a project which especially has multiple git repositories.
 
+## Features
+
+* Support to create a tag for a git repository
+* Support to create a release (or pre-release) for [a GitHub repository](docs/github.md)
+* Support to integrate with GitOps framework (such as [Argo CD](https://github.com/argoproj/argo-cd))
+
 ## Installation
 
 Install it to a Kubernetes cluster. You can use [kubekey](https://github.com/kubesphere/kubekey) or [ks CLI](https://github.com/kubesphere-sigs/ks).
