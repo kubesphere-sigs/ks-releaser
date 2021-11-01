@@ -85,10 +85,12 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "Releaser")
 		os.Exit(1)
 	}
-	//if err = (&devopsv1alpha1.Releaser{}).SetupWebhookWithManager(mgr); err != nil {
-	//	setupLog.Error(err, "unable to create webhook", "webhook", "Releaser")
-	//	os.Exit(1)
-	//}
+	if os.Getenv("WEBHOOK") != "false" {
+		if err = (&devopsv1alpha1.Releaser{}).SetupWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "Releaser")
+			os.Exit(1)
+		}
+	}
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

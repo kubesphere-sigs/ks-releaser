@@ -17,10 +17,12 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"strings"
 )
 
 // log is for logging in this package.
@@ -38,6 +40,8 @@ func (r *Releaser) SetupWebhookWithManager(mgr ctrl.Manager) error {
 
 var _ webhook.Defaulter = &Releaser{}
 
+const defaultBranchName = "master"
+
 // Default implements webhook.Defaulter so a webhook will be registered for the type
 func (r *Releaser) Default() {
 	releaserlog.Info("default", "name", r.Name)
@@ -46,17 +50,40 @@ func (r *Releaser) Default() {
 		r.Spec.Phase = PhaseDraft
 	}
 
+	version := r.Spec.Version
+
 	for i, _ := range r.Spec.Repositories {
 		repo := &r.Spec.Repositories[i]
 		if repo.Provider == "" {
-			repo.Provider = ProviderGitHub
+			if strings.HasPrefix(repo.Address, "https://github.com/") {
+				repo.Provider = ProviderGitHub
+			} else if strings.HasPrefix(repo.Address, "https://gitlab.com/") {
+				repo.Provider = ProviderGitlab
+			} else if strings.HasPrefix(repo.Address, "https://bitbucket.org/") {
+				repo.Provider = ProviderBitbucket
+			} else if strings.HasPrefix(repo.Address, "https://gitee.com/") {
+				repo.Provider = ProviderGitee
+			} else {
+				repo.Provider = ProviderUnknown
+			}
 		}
 		if repo.Action == "" {
 			repo.Action = ActionTag
 		}
 		if repo.Branch == "" {
-			repo.Branch = "master"
+			repo.Branch = defaultBranchName
 		}
+		if repo.Version == "" {
+			repo.Version = version
+		}
+	}
+
+	if r.Spec.GitOps != nil && r.Spec.GitOps.Repository.Branch == "" {
+		r.Spec.GitOps.Repository.Branch = defaultBranchName
+	}
+
+	if r.Spec.Secret.Namespace == "" {
+		r.Spec.Secret.Namespace = r.Namespace
 	}
 }
 
@@ -69,7 +96,9 @@ var _ webhook.Validator = &Releaser{}
 func (r *Releaser) ValidateCreate() error {
 	releaserlog.Info("validate create", "name", r.Name)
 
-	// TODO(user): fill in your validation logic upon object creation.
+	if !r.Spec.Phase.IsValid() {
+		return errors.New("invalid phase")
+	}
 	return nil
 }
 
@@ -77,7 +106,10 @@ func (r *Releaser) ValidateCreate() error {
 func (r *Releaser) ValidateUpdate(old runtime.Object) error {
 	releaserlog.Info("validate update", "name", r.Name)
 
-	// TODO(user): fill in your validation logic upon object update.
+	oldReleaser := old.(*Releaser)
+	if oldReleaser.Spec.Phase == PhaseDone {
+		return errors.New("not allow to manipulate this release any more once the phase is done")
+	}
 	return nil
 }
 
