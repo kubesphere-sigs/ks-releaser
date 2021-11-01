@@ -49,6 +49,16 @@ const (
 	PhaseDone Phase = "done"
 )
 
+// IsValid checks if this is valid
+func (p *Phase) IsValid() bool {
+	switch *p {
+	case PhaseDraft, PhaseReady, PhaseDone:
+		return  true
+	default:
+		return false
+	}
+}
+
 // Repository represents a git repository
 type Repository struct {
 	Name     string   `json:"name"`
@@ -72,7 +82,9 @@ type Provider string
 const (
 	ProviderGitHub Provider = "github"
 	ProviderGitlab Provider = "gitlab"
+	ProviderBitbucket Provider = "bitbucket"
 	ProviderGitee  Provider = "gitee"
+	ProviderUnknown  Provider = "unknown"
 )
 
 // Action indicates the action once the request phase to be ready

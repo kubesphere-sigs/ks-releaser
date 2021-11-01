@@ -18,11 +18,15 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/go-git/go-git/v5/plumbing/storer"
 	"github.com/go-git/go-git/v5/plumbing/transport"
+	"github.com/kubesphere-sigs/ks-releaser/controllers/internal_scm"
 	"golang.org/x/crypto/ssh"
 	githttp "gopkg.in/src-d/go-git.v4/plumbing/transport/http"
 	gitssh "gopkg.in/src-d/go-git.v4/plumbing/transport/ssh"
@@ -33,6 +37,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"strings"
 	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -92,7 +97,6 @@ func (r *ReleaserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 	}
 
 	var errSlice = ErrorSlice{}
-	copiedReleaser := releaser.DeepCopy()
 	for i, _ := range spec.Repositories {
 		repo := spec.Repositories[i]
 		releaseRrr := release(spec.Repositories[i], secret)
@@ -111,20 +115,20 @@ func (r *ReleaserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 				Message:        releaseRrr.Error(),
 			}
 		}
-		addCondition(copiedReleaser, condition)
+		addCondition(releaser, condition)
 	}
 
 	if err = errSlice.ToError(); err == nil {
-		copiedReleaser.Status.CompletionTime = &metav1.Time{Time: time.Now()}
+		releaser.Status.CompletionTime = &metav1.Time{Time: time.Now()}
 	} else {
 		result = ctrl.Result{
 			RequeueAfter: time.Second * 5,
 		}
 	}
 
-	r.markAsDone(secret, copiedReleaser)
-	if updateErr := r.Status().Update(ctx, copiedReleaser); updateErr == nil {
-		r.updateHash(ctx, copiedReleaser)
+	r.markAsDone(secret, releaser)
+	if updateErr := r.Status().Update(ctx, releaser); updateErr == nil {
+		r.updateHash(ctx, releaser)
 	} else {
 		fmt.Println(updateErr)
 	}
@@ -167,7 +171,7 @@ func release(repo devopsv1alpha1.Repository, secret *v1.Secret) (err error) {
 	auth := getAuth(secret)
 
 	var gitRepo *git.Repository
-	if gitRepo, err = clone(repo.Address, repo.Branch, auth, "."); err != nil {
+	if gitRepo, err = clone(repo.Address, repo.Branch, auth, "tmp"); err != nil {
 		return
 	}
 
@@ -178,7 +182,28 @@ func release(repo devopsv1alpha1.Repository, secret *v1.Secret) (err error) {
 		return
 	}
 
-	err = pushTags(gitRepo, auth)
+	if err = pushTags(gitRepo, repo.Version, auth); err != nil {
+		return
+	}
+
+	var orgAndRepo string
+	switch repo.Provider {
+	case devopsv1alpha1.ProviderGitHub:
+		orgAndRepo = strings.ReplaceAll(repo.Address, "https://github.com/", "")
+	}
+
+	switch repo.Action {
+	case devopsv1alpha1.ActionPreRelease:
+		provider := internal_scm.GetGitProvider(string(repo.Provider), orgAndRepo, string(secret.Data[v1.BasicAuthPasswordKey]))
+		if provider != nil {
+			err = provider.Release(repo.Version, false, true)
+		}
+	case devopsv1alpha1.ActionRelease:
+		provider := internal_scm.GetGitProvider(string(repo.Provider), orgAndRepo, string(secret.Data[v1.BasicAuthPasswordKey]))
+		if provider != nil {
+			err = provider.Release(repo.Version, false, false)
+		}
+	}
 	return
 }
 
@@ -243,25 +268,20 @@ func clone(gitRepo, branch string, auth transport.AuthMethod, cacheDir string) (
 }
 
 func tagExists(tag string, r *git.Repository) bool {
-	tagFoundErr := "tag was found"
-	tags, err := r.TagObjects()
-	if err != nil {
-		fmt.Printf("get tags error: %s\n", err)
-		return false
+	var err error
+	var tags storer.ReferenceIter
+	if tags, err = r.Tags(); err == nil {
+		err = tags.ForEach(func(reference *plumbing.Reference) error {
+			tagRef := reference.Name()
+			if tagRef.IsTag() && !tagRef.IsRemote() {
+				_ = r.DeleteTag(tag)
+			} else if tagRef.IsTag() && tagRef.IsRemote() && tagRef.String() == tag {
+				return nil
+			}
+			return errors.New("not found tag")
+		})
 	}
-	res := false
-	err = tags.ForEach(func(t *object.Tag) error {
-		if t.Name == tag {
-			res = true
-			return fmt.Errorf(tagFoundErr)
-		}
-		return nil
-	})
-	if err != nil && err.Error() != tagFoundErr {
-		fmt.Printf("iterate tags error: %s\n", err)
-		return false
-	}
-	return res
+	return err == nil || (err != nil && err.Error() != "not found tag")
 }
 
 func setTag(r *git.Repository, tag, message string) (bool, error) {
@@ -291,11 +311,16 @@ func setTag(r *git.Repository, tag, message string) (bool, error) {
 	return true, nil
 }
 
-func pushTags(r *git.Repository, auth transport.AuthMethod) (err error) {
+func pushTags(r *git.Repository, tag string, auth transport.AuthMethod) (err error) {
+	var ref []config.RefSpec
+	if tag != "" {
+		ref = []config.RefSpec{config.RefSpec(fmt.Sprintf("refs/tags/%s:refs/tags/%s", tag, tag))}
+	}
+
 	po := &git.PushOptions{
 		RemoteName: "origin",
 		Progress:   os.Stdout,
-		//RefSpecs:   []config.RefSpec{config.RefSpec("refs/tags/*:refs/tags/*")},
+		RefSpecs:   ref,
 		Auth:       auth,
 	}
 	if err = r.Push(po); err != nil {
@@ -332,38 +357,47 @@ func (r *ReleaserReconciler) markAsDone(secret *v1.Secret, releaser *devopsv1alp
 	gitOps := releaser.Spec.GitOps
 	if gitOps == nil || !gitOps.Enable {
 		releaser.Spec.Phase = devopsv1alpha1.PhaseDone
+		_ = r.Update(context.TODO(), releaser)
 		return
 	}
 
+	var err error
+	var gitRepo *git.Repository
 	repo := gitOps.Repository
-	if gitRepo, err := clone(repo.Address, repo.Branch, getAuth(secret), "tmp"); err == nil {
+	if gitRepo, err = clone(repo.Address, repo.Branch, getAuth(secret), "tmp"); err == nil {
 		var gitRepoURL *url.URL
 		if gitRepoURL, err = url.Parse(repo.Address); err != nil {
 			return
 		}
 
-		dir := path.Join(".", gitRepoURL.Path)
+		dir := path.Join("tmp", gitRepoURL.Path)
 		filePath := path.Join(dir, fmt.Sprintf("%s.yaml", releaser.Name))
 
-		if data, err := ioutil.ReadFile(filePath); err == nil {
+		var data []byte
+		if data, err = ioutil.ReadFile(filePath); err == nil {
 			data, err = updateReleaserAsYAML(data, func(releaser *devopsv1alpha1.Releaser) {
 				releaser.Spec.Phase = devopsv1alpha1.PhaseDone
 			})
 			if err == nil {
-				if err := ioutil.WriteFile(filePath, data, 0644); err != nil {
+				if err = ioutil.WriteFile(filePath, data, 0644); err != nil {
 					fmt.Println("failed to write file", filePath)
 				} else {
-					if err := addAndCommit(gitRepo); err == nil {
-						err = pushTags(gitRepo, getAuth(secret))
+					if err = addAndCommit(gitRepo); err == nil {
+						err = pushTags(gitRepo, "",getAuth(secret))
 					}
 				}
 			}
 		}
-		fmt.Println(err)
+
+		if err != nil {
+			fmt.Println(err)
+		}
+	} else {
+		fmt.Println("failed to clone gitops repo", err)
 	}
 }
 
-func addAndCommit(repo *git.Repository) (err error){
+func addAndCommit(repo *git.Repository) (err error) {
 	var w *git.Worktree
 	if w, err = repo.Worktree(); err == nil {
 		_, _ = w.Add(".")
