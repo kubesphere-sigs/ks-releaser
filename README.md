@@ -10,6 +10,10 @@ This project aims to help to release a project which especially has multiple git
 
 Install it to a Kubernetes cluster. You can use [kubekey](https://github.com/kubesphere/kubekey) or [ks CLI](https://github.com/kubesphere-sigs/ks).
 
+### Requirement
+
+* [cert-manager](docs/cert-manager.md)
+
 ### For local environment
 
 ```shell

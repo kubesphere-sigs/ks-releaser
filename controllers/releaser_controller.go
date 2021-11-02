@@ -52,6 +52,8 @@ import (
 type ReleaserReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+
+	gitUser string
 }
 
 //+kubebuilder:rbac:groups=devops.kubesphere.io,resources=releasers,verbs=get;list;watch;create;update;patch;delete
@@ -96,10 +98,12 @@ func (r *ReleaserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 		return
 	}
 
+	r.gitUser = string(secret.Data[v1.BasicAuthUsernameKey])
+
 	var errSlice = ErrorSlice{}
 	for i, _ := range spec.Repositories {
 		repo := spec.Repositories[i]
-		releaseRrr := release(spec.Repositories[i], secret)
+		releaseRrr := release(spec.Repositories[i], secret, r.gitUser)
 		var condition devopsv1alpha1.Condition
 		if releaseRrr == nil {
 			condition = devopsv1alpha1.Condition{
@@ -167,7 +171,7 @@ func (r *ReleaserReconciler) updateHash(ctx context.Context, releaser *devopsv1a
 	_ = r.Update(ctx, releaser)
 }
 
-func release(repo devopsv1alpha1.Repository, secret *v1.Secret) (err error) {
+func release(repo devopsv1alpha1.Repository, secret *v1.Secret, user string) (err error) {
 	auth := getAuth(secret)
 
 	var gitRepo *git.Repository
@@ -178,7 +182,7 @@ func release(repo devopsv1alpha1.Repository, secret *v1.Secret) (err error) {
 	if repo.Message == "" {
 		repo.Message = "released by ks-releaser"
 	}
-	if _, err = setTag(gitRepo, repo.Version, repo.Message); err != nil {
+	if _, err = setTag(gitRepo, repo.Version, repo.Message, user); err != nil {
 		return
 	}
 
@@ -284,7 +288,7 @@ func tagExists(tag string, r *git.Repository) bool {
 	return err == nil || (err != nil && err.Error() != "not found tag")
 }
 
-func setTag(r *git.Repository, tag, message string) (bool, error) {
+func setTag(r *git.Repository, tag, message, user string) (bool, error) {
 	if tagExists(tag, r) {
 		fmt.Printf("tag %s already exists\n", tag)
 		return false, nil
@@ -297,8 +301,8 @@ func setTag(r *git.Repository, tag, message string) (bool, error) {
 	}
 	_, err = r.CreateTag(tag, h.Hash(), &git.CreateTagOptions{
 		Tagger: &object.Signature{
-			Name:  "ks-releaser",
-			Email: "linuxsuren@gmail.com",
+			Name:  user,
+			Email: fmt.Sprintf("%s@users.noreply.github.com", user),
 			When:  time.Time{},
 		},
 		Message: message,
@@ -382,8 +386,8 @@ func (r *ReleaserReconciler) markAsDone(secret *v1.Secret, releaser *devopsv1alp
 				if err = ioutil.WriteFile(filePath, data, 0644); err != nil {
 					fmt.Println("failed to write file", filePath)
 				} else {
-					if err = addAndCommit(gitRepo); err == nil {
-						err = pushTags(gitRepo, "",getAuth(secret))
+					if err = addAndCommit(gitRepo, r.gitUser); err == nil {
+						err = pushTags(gitRepo, "", getAuth(secret))
 					}
 				}
 			}
@@ -397,7 +401,7 @@ func (r *ReleaserReconciler) markAsDone(secret *v1.Secret, releaser *devopsv1alp
 	}
 }
 
-func addAndCommit(repo *git.Repository) (err error) {
+func addAndCommit(repo *git.Repository, user string) (err error) {
 	var w *git.Worktree
 	if w, err = repo.Worktree(); err == nil {
 		_, _ = w.Add(".")
@@ -405,8 +409,8 @@ func addAndCommit(repo *git.Repository) (err error) {
 		commit, err = w.Commit("example go-git commit", &git.CommitOptions{
 			All: true,
 			Author: &object.Signature{
-				Name:  "John Doe",
-				Email: "john@doe.org",
+				Name:  user,
+				Email: fmt.Sprintf("%s@users.noreply.github.com", user),
 				When:  time.Now(),
 			},
 		})
