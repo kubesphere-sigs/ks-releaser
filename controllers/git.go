@@ -26,7 +26,7 @@ import (
 /**
 TODO make these functions into a struct
 For example, we can share parts of the variables, such as git.Repository, secret .etc.
- */
+*/
 
 func saveAndPush(gitRepo *git.Repository, user, targetFile string, data []byte, secret *v1.Secret) (err error) {
 	if err = ioutil.WriteFile(targetFile, data, 0644); err != nil {
@@ -89,12 +89,12 @@ func release(repo devopsv1alpha1.Repository, secret *v1.Secret, user string) (er
 	case devopsv1alpha1.ActionPreRelease:
 		provider := internal_scm.GetGitProvider(string(repo.Provider), orgAndRepo, string(secret.Data[v1.BasicAuthPasswordKey]))
 		if provider != nil {
-			err = provider.Release(repo.Version, false, true)
+			err = provider.Release(repo.Version, repo.Branch, false, true)
 		}
 	case devopsv1alpha1.ActionRelease:
 		provider := internal_scm.GetGitProvider(string(repo.Provider), orgAndRepo, string(secret.Data[v1.BasicAuthPasswordKey]))
 		if provider != nil {
-			err = provider.Release(repo.Version, false, false)
+			err = provider.Release(repo.Version, repo.Branch, false, false)
 		}
 	}
 	return

@@ -21,12 +21,13 @@ func NewGitHub(repo, token string) *GitHub {
 	}
 }
 
-func (r *GitHub) Release(version string, draft, prerelease bool) (err error) {
+func (r *GitHub) Release(version, commitish string, draft, prerelease bool) (err error) {
 	client := r.getClient()
 
 	releaseInput := &scm.ReleaseInput{
 		Title:      version,
 		Tag:        version,
+		Commitish:  commitish,
 		Draft:      draft,
 		Prerelease: prerelease,
 	}

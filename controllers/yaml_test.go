@@ -19,7 +19,7 @@ func Test_updateReleaserAsYAML(t *testing.T) {
 	}{{
 		name: "normal case",
 		args: args{
-			data:     []byte(`apiVersion: devops.kubesphere.io/v1alpha1
+			data: []byte(`apiVersion: devops.kubesphere.io/v1alpha1
 kind: Releaser
 metadata:
   name: releaser-sample-1
