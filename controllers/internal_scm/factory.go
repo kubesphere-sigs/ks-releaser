@@ -3,7 +3,7 @@ package internal_scm
 import "github.com/kubesphere-sigs/ks-releaser/api/v1alpha1"
 
 type GitReleaser interface {
-	Release(version string, draft, prerelease bool) (err error)
+	Release(version, commitish string, draft, prerelease bool) (err error)
 }
 
 // GetGitProvider returns the GitReleaser implement by kind
