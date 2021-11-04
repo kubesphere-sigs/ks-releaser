@@ -81,6 +81,7 @@ func main() {
 	if err = (&controllers.ReleaserReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
+		GitCacheDir: "tmp",
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Releaser")
 		os.Exit(1)

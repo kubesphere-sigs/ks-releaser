@@ -1,7 +1,7 @@
 apiVersion: devops.kubesphere.io/v1alpha1
 kind: Releaser
 metadata:
-  name: releaser-sample-4
+  name: releaser-sample-v0.0.9
 spec:
   version: v0.0.4
   gitOps:
@@ -15,7 +15,7 @@ spec:
       address: https://github.com/linuxsuren-bot/test
       action: release
       branch: master
-      version: v0.0.4
+      version: v0.0.8
       provider: github
   secret:
     name: test-git
