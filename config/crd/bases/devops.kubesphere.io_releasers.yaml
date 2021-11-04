@@ -123,15 +123,17 @@ spec:
                 items:
                   description: Condition indicates the status of each git repositories
                   properties:
+                    conditionType:
+                      description: ConditionType is the type of a condition
+                      type: string
                     message:
                       type: string
-                    repositoryName:
-                      type: string
                     status:
+                      description: ConditionStatus is the status of a condition
                       type: string
                   required:
+                  - conditionType
                   - message
-                  - repositoryName
                   - status
                   type: object
                 type: array

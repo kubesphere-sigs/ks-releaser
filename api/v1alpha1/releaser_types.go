@@ -53,7 +53,7 @@ const (
 func (p *Phase) IsValid() bool {
 	switch *p {
 	case PhaseDraft, PhaseReady, PhaseDone:
-		return  true
+		return true
 	default:
 		return false
 	}
@@ -80,11 +80,11 @@ type GitOps struct {
 type Provider string
 
 const (
-	ProviderGitHub Provider = "github"
-	ProviderGitlab Provider = "gitlab"
+	ProviderGitHub    Provider = "github"
+	ProviderGitlab    Provider = "gitlab"
 	ProviderBitbucket Provider = "bitbucket"
-	ProviderGitee  Provider = "gitee"
-	ProviderUnknown  Provider = "unknown"
+	ProviderGitee     Provider = "gitee"
+	ProviderUnknown   Provider = "unknown"
 )
 
 // Action indicates the action once the request phase to be ready
@@ -107,21 +107,37 @@ type ReleaserStatus struct {
 
 // Condition indicates the status of each git repositories
 type Condition struct {
-	RepositoryName string `json:"repositoryName"`
-	Status         string `json:"status"`
-	Message        string `json:"message"`
+	ConditionType ConditionType   `json:"conditionType"`
+	Status        ConditionStatus `json:"status"`
+	Message       string          `json:"message"`
 }
+
+// ConditionType is the type of a condition
+type ConditionType string
+
+const (
+	ConditionTypeRelease ConditionType = "release"
+	ConditionTypeOther   ConditionType = "other"
+)
+
+// ConditionStatus is the status of a condition
+type ConditionStatus string
+
+const (
+	ConditionStatusSuccess ConditionStatus = "success"
+	ConditionStatusFailed  ConditionStatus = "failed"
+)
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 
 // Releaser is the Schema for the releasers API
 type Releaser struct {
-	metav1.TypeMeta   `json:",inline"`
+	metav1.TypeMeta `json:",inline"`
 	// +optional
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   ReleaserSpec   `json:"spec,omitempty"`
+	Spec ReleaserSpec `json:"spec,omitempty"`
 	// +optional
 	Status ReleaserStatus `json:"status,omitempty"`
 }
