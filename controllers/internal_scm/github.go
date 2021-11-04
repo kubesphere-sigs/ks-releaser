@@ -22,17 +22,50 @@ func NewGitHub(repo, token string) *GitHub {
 }
 
 func (r *GitHub) Release(version string, draft, prerelease bool) (err error) {
-	client := github.NewDefault()
+	client := r.getClient()
+
+	releaseInput := &scm.ReleaseInput{
+		Title:      version,
+		Tag:        version,
+		Draft:      draft,
+		Prerelease: prerelease,
+	}
+
+	// just publish the draft release if it is existing
+	release := r.findDraftRelease(version)
+	if release != nil {
+		releaseInput.Description = release.Description
+		releaseInput.Title = release.Title
+		_, _, err = client.Releases.Update(context.TODO(), r.repo, release.ID, releaseInput)
+	} else {
+		_, _, err = client.Releases.Create(context.TODO(), r.repo, releaseInput)
+	}
+	return
+}
+
+func (r *GitHub) getClient() (client *scm.Client) {
+	client = github.NewDefault()
 	client.Client = &http.Client{
 		Transport: &transport.BearerToken{
 			Token: r.token,
 		},
 	}
-	_, _, err = client.Releases.Create(context.TODO(), r.repo, &scm.ReleaseInput{
-		Title:      version,
-		Tag:        version,
-		Draft:      draft,
-		Prerelease: prerelease,
-	})
 	return
+}
+
+func (r *GitHub) findDraftRelease(version string) *scm.Release {
+	client := r.getClient()
+
+	if releaseList, _, err := client.Releases.List(context.TODO(), r.repo, scm.ReleaseListOptions{
+		Page: 1,
+		Size: 50,
+	}); err == nil {
+		for i, _ := range releaseList {
+			release := releaseList[i]
+			if release.Draft && release.Tag == version {
+				return release
+			}
+		}
+	}
+	return nil
 }
