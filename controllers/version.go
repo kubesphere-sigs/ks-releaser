@@ -17,7 +17,18 @@ func bumpVersion(versionStr string) (nextVersion string, err error) {
 		return
 	}
 
-	version.Patch += 1
+	if preVersionCount := len(version.Pre); preVersionCount > 0 {
+		for i := preVersionCount -1; i >= 0; i-- {
+			preVersion := &version.Pre[i]
+			if preVersion.IsNumeric() {
+				preVersion.VersionNum+=1
+				break
+			}
+		}
+	} else {
+		version.Patch += 1
+	}
+
 	nextVersion = version.String()
 	if strings.HasPrefix(versionStr, "v") {
 		nextVersion = "v" + nextVersion
