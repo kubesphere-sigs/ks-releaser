@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"errors"
 	"fmt"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
@@ -65,6 +64,7 @@ func release(repo devopsv1alpha1.Repository, secret *v1.Secret, user string) (er
 
 	var gitRepo *git.Repository
 	if gitRepo, err = clone(repo.Address, repo.Branch, auth, "tmp"); err != nil {
+		err = fmt.Errorf("failed to clone %s, error: %v", repo.Address, err)
 		return
 	}
 
@@ -72,30 +72,38 @@ func release(repo devopsv1alpha1.Repository, secret *v1.Secret, user string) (er
 		repo.Message = "released by ks-releaser"
 	}
 	if _, err = setTag(gitRepo, repo.Version, repo.Message, user); err != nil {
+		err = fmt.Errorf("failed to create tag %s for %s, error: %v", repo.Version, repo.Address, err)
 		return
 	}
 
 	if err = pushTags(gitRepo, repo.Version, auth); err != nil {
+		err = fmt.Errorf("failed to push tag %s into %s, error: %v", repo.Version, repo.Address, err)
 		return
 	}
 
+	token := string(secret.Data[v1.BasicAuthPasswordKey])
+	server := string(secret.Data["server"])
 	var orgAndRepo string
 	switch repo.Provider {
 	case devopsv1alpha1.ProviderGitHub:
 		orgAndRepo = strings.ReplaceAll(repo.Address, "https://github.com/", "")
+	case devopsv1alpha1.ProviderGitlab:
+		orgAndRepo = strings.ReplaceAll(repo.Address, "https://gitlab.com/", "")
+		orgAndRepo = strings.ReplaceAll(orgAndRepo, ".git", "")
+	case devopsv1alpha1.ProviderGitea:
+		orgAndRepo = strings.ReplaceAll(repo.Address, server, "")
+	}
+
+	provider := internal_scm.GetGitProvider(string(repo.Provider), server, orgAndRepo, token)
+	if provider == nil {
+		return
 	}
 
 	switch repo.Action {
 	case devopsv1alpha1.ActionPreRelease:
-		provider := internal_scm.GetGitProvider(string(repo.Provider), orgAndRepo, string(secret.Data[v1.BasicAuthPasswordKey]))
-		if provider != nil {
-			err = provider.Release(repo.Version, repo.Branch, false, true)
-		}
+		err = provider.Release(repo.Version, repo.Branch, false, true)
 	case devopsv1alpha1.ActionRelease:
-		provider := internal_scm.GetGitProvider(string(repo.Provider), orgAndRepo, string(secret.Data[v1.BasicAuthPasswordKey]))
-		if provider != nil {
-			err = provider.Release(repo.Version, repo.Branch, false, false)
-		}
+		err = provider.Release(repo.Version, repo.Branch, false, false)
 	}
 	return
 }
@@ -164,17 +172,22 @@ func tagExists(tag string, r *git.Repository) bool {
 	var err error
 	var tags storer.ReferenceIter
 	if tags, err = r.Tags(); err == nil {
-		err = tags.ForEach(func(reference *plumbing.Reference) error {
-			tagRef := reference.Name()
-			if tagRef.IsTag() && !tagRef.IsRemote() {
-				_ = r.DeleteTag(tag)
-			} else if tagRef.IsTag() && tagRef.IsRemote() && tagRef.String() == tag {
-				return nil
+		var ref *plumbing.Reference
+		for ref, _ = tags.Next(); ref != nil; ref, _ = tags.Next() {
+			if !ref.Target().IsTag() {
+				continue
 			}
-			return errors.New("not found tag")
-		})
+
+			if ref.Target().String() == tag {
+				if !ref.Target().IsRemote() {
+					_ = r.DeleteTag(tag)
+					return false
+				}
+				return true
+			}
+		}
 	}
-	return err == nil || (err != nil && err.Error() != "not found tag")
+	return false
 }
 
 func setTag(r *git.Repository, tag, message, user string) (bool, error) {

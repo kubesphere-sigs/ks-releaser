@@ -1,26 +1,26 @@
 package internal_scm
 
 import (
-	"github.com/jenkins-x/go-scm/scm/driver/github"
+	"github.com/jenkins-x/go-scm/scm/driver/gitlab"
 	"github.com/jenkins-x/go-scm/scm/transport"
 	"net/http"
 )
 
-type GitHub struct {
+type Gitlab struct {
 	repo  string
 	token string
 }
 
-// NewGitHub creates a new instance
-func NewGitHub(repo, token string) *GitHub {
-	return &GitHub{
+// NewGitlab creates a new instance
+func NewGitlab(repo, token string) *Gitlab {
+	return &Gitlab{
 		repo:  repo,
 		token: token,
 	}
 }
 
-func (r *GitHub) Release(version, commitish string, draft, prerelease bool) (err error) {
-	client := github.NewDefault()
+func (r *Gitlab) Release(version, commitish string, draft, prerelease bool) (err error) {
+	client := gitlab.NewDefault()
 	client.Client = &http.Client{
 		Transport: &transport.BearerToken{
 			Token: r.token,

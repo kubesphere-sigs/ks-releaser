@@ -21,12 +21,12 @@ import (
 	"fmt"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-logr/logr"
-	"io/ioutil"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"net/url"
 	"path"
+	"sigs.k8s.io/yaml"
 	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -92,7 +92,8 @@ func (r *ReleaserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 	var errSlice = ErrorSlice{}
 	for i, _ := range spec.Repositories {
 		repo := spec.Repositories[i]
-		releaseRrr := release(spec.Repositories[i], secret, r.gitUser)
+		releaseRrr := release(repo, secret, r.gitUser)
+
 		var condition devopsv1alpha1.Condition
 		if releaseRrr == nil {
 			condition = devopsv1alpha1.Condition{
@@ -111,15 +112,11 @@ func (r *ReleaserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 		addCondition(releaser, condition)
 	}
 
-	if err = errSlice.ToError(); err == nil {
-		releaser.Status.CompletionTime = &metav1.Time{Time: time.Now()}
-	} else {
+	if err = errSlice.ToError(); err != nil {
 		result = ctrl.Result{
 			RequeueAfter: time.Second * 5,
 		}
-	}
-
-	if err == nil {
+	} else {
 		if err = r.markAsDone(secret, releaser); err != nil {
 			condition := devopsv1alpha1.Condition{
 				ConditionType: devopsv1alpha1.ConditionTypeOther,
@@ -130,9 +127,13 @@ func (r *ReleaserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 		}
 	}
 
+	if err == nil {
+		releaser.Status.CompletionTime = &metav1.Time{Time: time.Now()}
+	}
+
 	if updateErr := r.Status().Update(ctx, releaser); err == nil && updateErr == nil {
-		r.updateHash(ctx, releaser)
-	} else {
+		err = r.updateHash(ctx, releaser)
+	} else if err == nil && updateErr != nil {
 		err = updateErr
 	}
 	return
@@ -142,16 +143,17 @@ func (r *ReleaserReconciler) needToUpdate(ctx context.Context, releaser *devopsv
 	hash := releaser.Annotations["releaser.devops.kubesphere.io/hash"]
 	newHash := ComputeHash(releaser.Spec)
 	if hash == "" {
-		r.updateHash(ctx, releaser)
+		_ = r.updateHash(ctx, releaser)
 		return true
 	}
 	return hash != newHash
 }
 
-func (r *ReleaserReconciler) updateHash(ctx context.Context, releaser *devopsv1alpha1.Releaser) {
+func (r *ReleaserReconciler) updateHash(ctx context.Context, releaser *devopsv1alpha1.Releaser) (err error) {
 	newHash := ComputeHash(releaser.Spec)
 	releaser.Annotations["releaser.devops.kubesphere.io/hash"] = newHash
-	_ = r.Update(ctx, releaser)
+	err = r.Update(ctx, releaser)
+	return
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -165,7 +167,7 @@ func (r *ReleaserReconciler) markAsDone(secret *v1.Secret, releaser *devopsv1alp
 	gitOps := releaser.Spec.GitOps
 	if gitOps == nil || !gitOps.Enable {
 		releaser.Spec.Phase = devopsv1alpha1.PhaseDone
-		_ = r.Update(context.TODO(), releaser)
+		err = r.Update(context.TODO(), releaser)
 		return
 	}
 
@@ -197,26 +199,49 @@ func (r *ReleaserReconciler) markAsDone(secret *v1.Secret, releaser *devopsv1alp
 	filePath := path.Join(dir, fmt.Sprintf("%s.yaml", releaser.Name))
 
 	var data []byte
-	if data, err = ioutil.ReadFile(filePath); err == nil {
-		data, err = updateReleaserAsYAML(data, func(releaser *devopsv1alpha1.Releaser) {
-			releaser.Spec.Phase = devopsv1alpha1.PhaseDone
-		})
-		if err == nil {
-			if err = saveAndPush(gitRepo, r.gitUser, filePath, data, secret); err != nil {
-				fmt.Println("failed to write file", filePath)
-			}
+	copiedReleaser := releaser.DeepCopy()
+	copiedReleaser.Spec.Phase = devopsv1alpha1.PhaseDone
+	copiedReleaser.ObjectMeta.ManagedFields = nil
+	copiedReleaser.ObjectMeta.UID = ""
+	copiedReleaser.ObjectMeta.ResourceVersion = ""
+	data, _ = yaml.Marshal(copiedReleaser)
 
-			if err == nil {
-				var bumpFilename string
-				if data, bumpFilename, err = bumpReleaserAsData(data); err != nil {
-					err = fmt.Errorf("failed to bump releaser: %s, error: %v", filePath, err)
-				} else {
-					bumpFilename = path.Join(dir, bumpFilename)
-					err = saveAndPush(gitRepo, r.gitUser, bumpFilename, data, secret)
-				}
-			}
-		}
+	r.logger.Info("start to commit phase to be done", "name", releaser.Name)
+	if err = saveAndPush(gitRepo, r.gitUser, filePath, data, secret); err != nil {
+		err = fmt.Errorf("failed to write file %s, error: %v", filePath, err)
+		return
 	}
+
+	r.logger.Info("start to create next release file")
+	var bumpFilename string
+	if data, bumpFilename, err = bumpReleaserAsData(data); err != nil {
+		err = fmt.Errorf("failed to bump releaser: %s, error: %v", filePath, err)
+	} else {
+		bumpFilename = path.Join(dir, bumpFilename)
+		err = saveAndPush(gitRepo, r.gitUser, bumpFilename, data, secret)
+	}
+
+	//if data, err = ioutil.ReadFile(filePath); err == nil {
+	//	data, err = updateReleaserAsYAML(data, func(releaser *devopsv1alpha1.Releaser) {
+	//		releaser.Spec.Phase = devopsv1alpha1.PhaseDone
+	//	})
+	//	if err == nil {
+	//		r.logger.Info("start to commit phase to be done", "name", releaser.Name)
+	//		if err = saveAndPush(gitRepo, r.gitUser, filePath, data, secret); err != nil {
+	//			err = fmt.Errorf("failed to write file %s, error: %v", filePath, err)
+	//			return
+	//		}
+	//
+	//		r.logger.Info("start to create next release file")
+	//		var bumpFilename string
+	//		if data, bumpFilename, err = bumpReleaserAsData(data); err != nil {
+	//			err = fmt.Errorf("failed to bump releaser: %s, error: %v", filePath, err)
+	//		} else {
+	//			bumpFilename = path.Join(dir, bumpFilename)
+	//			err = saveAndPush(gitRepo, r.gitUser, bumpFilename, data, secret)
+	//		}
+	//	}
+	//}
 	return
 }
 
