@@ -85,6 +85,7 @@ const (
 	ProviderGitlab    Provider = "gitlab"
 	ProviderBitbucket Provider = "bitbucket"
 	ProviderGitee     Provider = "gitee"
+	ProviderGitea     Provider = "gitea"
 	ProviderUnknown   Provider = "unknown"
 )
 

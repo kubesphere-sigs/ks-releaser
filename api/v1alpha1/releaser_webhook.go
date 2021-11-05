@@ -19,6 +19,7 @@ package v1alpha1
 import (
 	"errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"reflect"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -107,7 +108,7 @@ func (r *Releaser) ValidateUpdate(old runtime.Object) error {
 	releaserlog.Info("validate update", "name", r.Name)
 
 	oldReleaser := old.(*Releaser)
-	if oldReleaser.Spec.Phase == PhaseDone {
+	if oldReleaser.Spec.Phase == PhaseDone && !reflect.DeepEqual(oldReleaser.Spec, r.Spec) {
 		return errors.New("not allow to manipulate this release any more once the phase is done")
 	}
 	return nil
