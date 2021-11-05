@@ -41,6 +41,27 @@ func TestVersionBump(t *testing.T) {
 		},
 		wantErr:     false,
 		wantVersion: "v1.0.1",
+	}, {
+		name: "version with alpha tail",
+		arg: struct{ version string }{
+			version: "v1.2.0-alpha.1",
+		},
+		wantErr:     false,
+		wantVersion: "v1.2.0-alpha.2",
+	}, {
+		name: "version with beta tail",
+		arg: struct{ version string }{
+			version: "v1.2.0-beta.0",
+		},
+		wantErr:     false,
+		wantVersion: "v1.2.0-beta.1",
+	}, {
+		name: "version with rc tail",
+		arg: struct{ version string }{
+			version: "v1.2.0-rc.0",
+		},
+		wantErr:     false,
+		wantVersion: "v1.2.0-rc.1",
 	}}
 
 	for i, _ := range testCases {
