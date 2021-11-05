@@ -169,6 +169,18 @@ func (r *ReleaserReconciler) markAsDone(secret *v1.Secret, releaser *devopsv1alp
 		return
 	}
 
+	// use the secret from GitOps if it is existing
+	if gitOps.Secret.Name != "" {
+		namespacedName := types.NamespacedName{
+			Namespace: gitOps.Secret.Namespace,
+			Name:      gitOps.Secret.Name,
+		}
+		if err = r.Get(context.TODO(), namespacedName, secret); err != nil {
+			err = fmt.Errorf("failed to find secret from %v, error: %v", namespacedName, err)
+			return
+		}
+	}
+
 	var gitRepo *git.Repository
 	repo := gitOps.Repository
 	if gitRepo, err = clone(repo.Address, repo.Branch, getAuth(secret), r.GitCacheDir); err != nil {

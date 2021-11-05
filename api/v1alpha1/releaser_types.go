@@ -72,8 +72,9 @@ type Repository struct {
 
 // GitOps indicates to integrate with GitOps
 type GitOps struct {
-	Enable     bool       `json:"enable,omitempty"`
-	Repository Repository `json:"repository,omitempty"`
+	Enable     bool               `json:"enable,omitempty"`
+	Repository Repository         `json:"repository,omitempty"`
+	Secret     v1.SecretReference `json:"secret,omitempty"`
 }
 
 // Provider represents a git provider, such as: GitHub, Gitlab
