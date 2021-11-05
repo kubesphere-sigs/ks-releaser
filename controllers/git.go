@@ -192,7 +192,7 @@ func setTag(r *git.Repository, tag, message, user string) (bool, error) {
 		Tagger: &object.Signature{
 			Name:  user,
 			Email: fmt.Sprintf("%s@users.noreply.github.com", user),
-			When:  time.Time{},
+			When:  time.Now(),
 		},
 		Message: message,
 	})
