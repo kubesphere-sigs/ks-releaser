@@ -22,13 +22,25 @@ func TestGetGitProvider(t *testing.T) {
 		},
 		exist: true,
 	}, {
+		name: "gitlab",
+		args: args{
+			kind: "gitlab",
+		},
+		exist: true,
+	}, {
+		name: "gitea",
+		args: args{
+			kind: "gitea",
+		},
+		exist: true,
+	}, {
 		name:  "fake",
 		args:  args{},
 		exist: false,
 	}}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := GetGitProvider(tt.args.kind, tt.args.repo, tt.args.token)
+			got := GetGitProvider(tt.args.kind, "", tt.args.repo, tt.args.token)
 			if tt.exist {
 				assert.NotNil(t, got)
 			} else {
