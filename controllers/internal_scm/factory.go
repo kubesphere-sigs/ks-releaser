@@ -34,7 +34,20 @@ func release(client *scm.Client, repo, version, commitish string, draft, prerele
 
 func findRelease(client *scm.Client, repo, version string) (release *scm.Release) {
 	var err error
-	if release, _, err = client.Releases.FindByTag(context.TODO(), repo, version); err != nil {
+	cxt := context.TODO()
+	if release, _, err = client.Releases.FindByTag(cxt, repo, version); err == scm.ErrNotFound {
+		var list []*scm.Release
+		if list, _, err = client.Releases.List(cxt, repo, scm.ReleaseListOptions{Page: 1, Size: 200}); err != nil {
+			release = nil
+		} else {
+			for i, _ := range list {
+				if list[i].Tag == version {
+					release = list[i]
+					return
+				}
+			}
+		}
+	} else if err != nil {
 		release = nil
 	}
 	return
