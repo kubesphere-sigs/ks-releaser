@@ -137,13 +137,27 @@ func clone(gitRepo, branch string, auth transport.AuthMethod, cacheDir string) (
 		if repo, err = git.PlainOpen(dir); err == nil {
 			var wd *git.Worktree
 
+			if err = repo.Fetch(&git.FetchOptions{
+				RefSpecs: []config.RefSpec{
+					"+refs/heads/*:refs/remotes/origin/*",
+				},
+				Progress: os.Stdout,
+				Force:    true, // in case of the force pushing
+				Auth:     auth,
+			}); err != nil && err != git.NoErrAlreadyUpToDate {
+				err = fmt.Errorf("unable to fetch %s, error: %v", gitRepo, err)
+				return
+			} else {
+				err = nil
+			}
+
 			if wd, err = repo.Worktree(); err == nil {
 				if err = wd.Checkout(&git.CheckoutOptions{
 					Branch: plumbing.NewBranchReferenceName(branch),
 					Create: false,
 					Force:  true,
 				}); err != nil {
-					err = fmt.Errorf("unable to checkout git branch: %s", branch)
+					err = fmt.Errorf("unable to checkout git branch: %s, error: %v", branch, err)
 					return
 				}
 
