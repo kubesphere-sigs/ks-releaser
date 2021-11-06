@@ -109,6 +109,10 @@ func release(repo devopsv1alpha1.Repository, secret *v1.Secret, user string) (er
 }
 
 func getAuth(secret *v1.Secret) (auth transport.AuthMethod) {
+	if secret == nil {
+		return
+	}
+
 	switch secret.Type {
 	case v1.SecretTypeBasicAuth:
 		auth = &githttp.BasicAuth{
@@ -168,22 +172,18 @@ func clone(gitRepo, branch string, auth transport.AuthMethod, cacheDir string) (
 	return
 }
 
-func tagExists(tag string, r *git.Repository) bool {
+func remoteTagExists(tag string, r *git.Repository) bool {
 	var err error
 	var tags storer.ReferenceIter
+
 	if tags, err = r.Tags(); err == nil {
 		var ref *plumbing.Reference
 		for ref, _ = tags.Next(); ref != nil; ref, _ = tags.Next() {
-			if !ref.Target().IsTag() {
-				continue
-			}
-
-			if ref.Target().String() == tag {
-				if !ref.Target().IsRemote() {
-					_ = r.DeleteTag(tag)
-					return false
+			if ref.Name().IsTag() && ref.Name().Short() == tag {
+				if _, err = r.TagObject(ref.Hash()); err == nil {
+					return true
 				}
-				return true
+				break
 			}
 		}
 	}
@@ -191,7 +191,7 @@ func tagExists(tag string, r *git.Repository) bool {
 }
 
 func setTag(r *git.Repository, tag, message, user string) (bool, error) {
-	if tagExists(tag, r) {
+	if remoteTagExists(tag, r) {
 		fmt.Printf("tag %s already exists\n", tag)
 		return false, nil
 	}
