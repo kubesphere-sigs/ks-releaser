@@ -1,3 +1,5 @@
+[![codecov](https://codecov.io/gh/kubesphere-sigs/ks-releaser/branch/master/graph/badge.svg?token=p7KBgnuIxn)](https://codecov.io/gh/kubesphere-sigs/ks-releaser)
+
 This project aims to help to release a project which especially has multiple git repositories.
 
 ## Features
