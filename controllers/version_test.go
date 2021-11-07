@@ -191,3 +191,51 @@ status: {}
 		})
 	}
 }
+
+func Test_isPreRelease(t *testing.T) {
+	type args struct {
+		versionStr string
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{{
+		name: "normal release version",
+		args: args{
+			versionStr: "v1.2.3",
+		},
+		want: false,
+	}, {
+		name: "alpha version",
+		args: args{
+			versionStr: "v1.2.3-alpha.1",
+		},
+		want: true,
+	}, {
+		name: "beta version",
+		args: args{
+			versionStr: "v1.2.3-beta.1",
+		},
+		want: true,
+	}, {
+		name: "rc version",
+		args: args{
+			versionStr: "v1.2.3-rc.1",
+		},
+		want: true,
+	}, {
+		name: "invalid version number",
+		args: args{
+			versionStr: "fake-version",
+		},
+		want: false,
+	}}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isPreRelease(tt.args.versionStr); got != tt.want {
+				t.Errorf("isPreRelease() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

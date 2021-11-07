@@ -23,7 +23,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
-	"strings"
 )
 
 // log is for logging in this package.
@@ -56,17 +55,7 @@ func (r *Releaser) Default() {
 	for i, _ := range r.Spec.Repositories {
 		repo := &r.Spec.Repositories[i]
 		if repo.Provider == "" {
-			if strings.HasPrefix(repo.Address, "https://github.com/") {
-				repo.Provider = ProviderGitHub
-			} else if strings.HasPrefix(repo.Address, "https://gitlab.com/") {
-				repo.Provider = ProviderGitlab
-			} else if strings.HasPrefix(repo.Address, "https://bitbucket.org/") {
-				repo.Provider = ProviderBitbucket
-			} else if strings.HasPrefix(repo.Address, "https://gitee.com/") {
-				repo.Provider = ProviderGitee
-			} else {
-				repo.Provider = ProviderUnknown
-			}
+			repo.Provider = GetDefaultProvider(repo)
 		}
 		if repo.Action == "" {
 			repo.Action = ActionTag
@@ -79,8 +68,13 @@ func (r *Releaser) Default() {
 		}
 	}
 
-	if r.Spec.GitOps != nil && r.Spec.GitOps.Repository.Branch == "" {
-		r.Spec.GitOps.Repository.Branch = defaultBranchName
+	if r.Spec.GitOps != nil {
+		if r.Spec.GitOps.Repository.Branch == "" {
+			r.Spec.GitOps.Repository.Branch = defaultBranchName
+		}
+		if r.Spec.GitOps.Repository.Provider == "" {
+			r.Spec.GitOps.Repository.Provider = GetDefaultProvider(&r.Spec.GitOps.Repository)
+		}
 	}
 
 	if r.Spec.Secret.Namespace == "" {

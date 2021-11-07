@@ -8,6 +8,13 @@ import (
 	"strings"
 )
 
+func isPreRelease(versionStr string) bool {
+	if version, err := semver.ParseTolerant(versionStr); err == nil {
+		return len(version.Pre) > 0
+	}
+	return false
+}
+
 func bumpVersion(versionStr string) (nextVersion string, err error) {
 	nextVersion = versionStr // keep using the old version if there's any problem happened
 
@@ -18,10 +25,10 @@ func bumpVersion(versionStr string) (nextVersion string, err error) {
 	}
 
 	if preVersionCount := len(version.Pre); preVersionCount > 0 {
-		for i := preVersionCount -1; i >= 0; i-- {
+		for i := preVersionCount - 1; i >= 0; i-- {
 			preVersion := &version.Pre[i]
 			if preVersion.IsNumeric() {
-				preVersion.VersionNum+=1
+				preVersion.VersionNum += 1
 				break
 			}
 		}
@@ -44,6 +51,11 @@ func bumpReleaser(releaser *devopsv1alpha1.Releaser) {
 		releaser.Name = nameWithoutVersion + nextVersion
 	}
 
+	// remove the metadata
+	releaser.ObjectMeta.Generation = 0
+	releaser.ObjectMeta.SelfLink = ""
+	releaser.ObjectMeta.Annotations = nil
+
 	releaser.Spec.Phase = devopsv1alpha1.PhaseDraft
 	releaser.Spec.Version = nextVersion
 
@@ -51,6 +63,9 @@ func bumpReleaser(releaser *devopsv1alpha1.Releaser) {
 		repo := &releaser.Spec.Repositories[i]
 		repo.Version, _ = bumpVersion(repo.Version)
 	}
+
+	// remove status
+	releaser.Status = devopsv1alpha1.ReleaserStatus{}
 	return
 }
 

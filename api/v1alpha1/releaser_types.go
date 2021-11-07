@@ -19,6 +19,7 @@ package v1alpha1
 import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"strings"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -50,8 +51,8 @@ const (
 )
 
 // IsValid checks if this is valid
-func (p *Phase) IsValid() bool {
-	switch *p {
+func (p Phase) IsValid() bool {
+	switch p {
 	case PhaseDraft, PhaseReady, PhaseDone:
 		return true
 	default:
@@ -61,13 +62,42 @@ func (p *Phase) IsValid() bool {
 
 // Repository represents a git repository
 type Repository struct {
-	Name     string   `json:"name"`
+	// +optional
+	Name string `json:"name"`
+	// +optional
 	Provider Provider `json:"provider,omitempty"`
 	Address  string   `json:"address"`
-	Branch   string   `json:"branch,omitempty"`
-	Version  string   `json:"version,omitempty"`
-	Message  string   `json:"message,omitempty"`
-	Action   Action   `json:"action,omitempty"`
+	// +optional
+	Branch string `json:"branch,omitempty"`
+	// +optional
+	Version string `json:"version,omitempty"`
+	// +optional
+	Message string `json:"message,omitempty"`
+	// +optional
+	Action Action `json:"action,omitempty"`
+}
+
+// GetDefaultProvider returns the default git provider
+func GetDefaultProvider(r *Repository) Provider {
+	if r.Provider != "" {
+		return r.Provider
+	}
+
+	address := r.Address
+	if strings.HasPrefix(address, "https://github.com/") {
+		return ProviderGitHub
+	} else if strings.HasPrefix(address, "https://gitlab.com/") {
+		return ProviderGitlab
+	} else if strings.HasPrefix(address, "https://bitbucket.org/") {
+		return ProviderBitbucket
+	} else if strings.HasPrefix(address, "https://gitee.com/") {
+		return ProviderGitee
+	} else if strings.HasPrefix(address, "https://gitea.com/") {
+		return ProviderGitea
+	} else if address != "" {
+		return ProviderUnknown
+	}
+	return ""
 }
 
 // GitOps indicates to integrate with GitOps
@@ -93,6 +123,7 @@ const (
 type Action string
 
 const (
+	ActionAuto       Action = "auto"
 	ActionTag        Action = "tag"
 	ActionPreRelease Action = "pre-release"
 	ActionRelease    Action = "release"
@@ -114,7 +145,7 @@ type Condition struct {
 	Message       string          `json:"message"`
 }
 
-// ConditionType is the type of a condition
+// ConditionType is the type of condition
 type ConditionType string
 
 const (
@@ -132,6 +163,9 @@ const (
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.spec.phase`,description="The phase of a Releaser"
+// +kubebuilder:printcolumn:name="Version",type=string,JSONPath=`.spec.version`,description="The version of a Releaser"
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`,description="The age of a Releaser"
 
 // Releaser is the Schema for the releasers API
 type Releaser struct {
