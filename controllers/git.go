@@ -83,27 +83,47 @@ func release(repo devopsv1alpha1.Repository, secret *v1.Secret, user string) (er
 
 	token := string(secret.Data[v1.BasicAuthPasswordKey])
 	server := string(secret.Data["server"])
-	var orgAndRepo string
-	switch repo.Provider {
-	case devopsv1alpha1.ProviderGitHub:
-		orgAndRepo = strings.ReplaceAll(repo.Address, "https://github.com/", "")
-	case devopsv1alpha1.ProviderGitlab:
-		orgAndRepo = strings.ReplaceAll(repo.Address, "https://gitlab.com/", "")
-		orgAndRepo = strings.ReplaceAll(orgAndRepo, ".git", "")
-	case devopsv1alpha1.ProviderGitea:
-		orgAndRepo = strings.ReplaceAll(repo.Address, server, "")
-	}
+	orgAndRepo := getOrgAndRepo(repo, server)
 
 	provider := internal_scm.GetGitProvider(string(repo.Provider), server, orgAndRepo, token)
 	if provider == nil {
 		return
 	}
 
-	switch repo.Action {
+	action := getAction(repo)
+	switch action {
 	case devopsv1alpha1.ActionPreRelease:
 		err = provider.Release(repo.Version, repo.Branch, false, true)
 	case devopsv1alpha1.ActionRelease:
 		err = provider.Release(repo.Version, repo.Branch, false, false)
+	}
+	return
+}
+
+func getOrgAndRepo(repo devopsv1alpha1.Repository, server string) (orgAndRepo string) {
+	provider := devopsv1alpha1.GetDefaultProvider(&repo)
+	address := repo.Address
+	address = strings.ReplaceAll(address, ".git", "")
+
+	switch provider {
+	case devopsv1alpha1.ProviderGitHub:
+		orgAndRepo = strings.ReplaceAll(address, "https://github.com/", "")
+	case devopsv1alpha1.ProviderGitlab:
+		orgAndRepo = strings.ReplaceAll(address, "https://gitlab.com/", "")
+	case devopsv1alpha1.ProviderGitee:
+		orgAndRepo = strings.ReplaceAll(address, "https://gitee.com/", "")
+	case devopsv1alpha1.ProviderBitbucket:
+		orgAndRepo = strings.ReplaceAll(address, "https://bitbucket.org/", "")
+	case devopsv1alpha1.ProviderGitea:
+		orgAndRepo = strings.ReplaceAll(address, server, "")
+	}
+	return
+}
+
+func getAction(repo devopsv1alpha1.Repository) (action devopsv1alpha1.Action) {
+	action = repo.Action
+	if action == devopsv1alpha1.ActionAuto && isPreRelease(repo.Version) {
+		action = devopsv1alpha1.ActionPreRelease
 	}
 	return
 }

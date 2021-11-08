@@ -220,28 +220,6 @@ func (r *ReleaserReconciler) markAsDone(secret *v1.Secret, releaser *devopsv1alp
 		bumpFilename = path.Join(dir, bumpFilename)
 		err = saveAndPush(gitRepo, r.gitUser, bumpFilename, data, secret)
 	}
-
-	//if data, err = ioutil.ReadFile(filePath); err == nil {
-	//	data, err = updateReleaserAsYAML(data, func(releaser *devopsv1alpha1.Releaser) {
-	//		releaser.Spec.Phase = devopsv1alpha1.PhaseDone
-	//	})
-	//	if err == nil {
-	//		r.logger.Info("start to commit phase to be done", "name", releaser.Name)
-	//		if err = saveAndPush(gitRepo, r.gitUser, filePath, data, secret); err != nil {
-	//			err = fmt.Errorf("failed to write file %s, error: %v", filePath, err)
-	//			return
-	//		}
-	//
-	//		r.logger.Info("start to create next release file")
-	//		var bumpFilename string
-	//		if data, bumpFilename, err = bumpReleaserAsData(data); err != nil {
-	//			err = fmt.Errorf("failed to bump releaser: %s, error: %v", filePath, err)
-	//		} else {
-	//			bumpFilename = path.Join(dir, bumpFilename)
-	//			err = saveAndPush(gitRepo, r.gitUser, bumpFilename, data, secret)
-	//		}
-	//	}
-	//}
 	return
 }
 
