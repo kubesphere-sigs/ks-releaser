@@ -62,3 +62,7 @@ dockers:
       - "--label=org.opencontainers.image.version={{.Version}}"
       - "--label=org.opencontainers.image.source=https://github.com/kubesphere-sigs/ks-releaser"
       - "--platform=linux/amd64"
+release:
+  discussion_category_name: General
+  extra_files:
+    - glob: ./tmp/install.yaml
