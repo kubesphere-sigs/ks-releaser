@@ -33,7 +33,8 @@ jobs:
           docker login ghcr.io --username linuxsuren --password ${{secrets.GH_PUBLISH_SECRETS}}
       - name: Generate install.yaml
         run: |
-          ./hack/generate-install-yaml.sh ${{ github.ref_name }}
+          ./hack/generate-install-yaml.sh -t ${{ github.ref_name }}
+          ./hack/generate-install-yaml.sh -t ${{ github.ref_name }} -p disable
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v2.7.0
         with:

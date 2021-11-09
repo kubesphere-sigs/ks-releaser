@@ -1,4 +1,5 @@
 [![codecov](https://codecov.io/gh/kubesphere-sigs/ks-releaser/branch/master/graph/badge.svg?token=p7KBgnuIxn)](https://codecov.io/gh/kubesphere-sigs/ks-releaser)
+![GitHub All Releases](https://img.shields.io/github/downloads/kubesphere-sigs/ks-releaser/total)
 
 This project aims to help to release a project which especially has multiple git repositories.
 
@@ -25,7 +26,14 @@ make deploy
 
 ### For production environment
 
-TBD
+```shell
+kubectl apply -f https://github.com/kubesphere-sigs/ks-releaser/releases/latest/download/install.yaml
+```
+
+or install it without ServiceMonitor
+```shell
+kubectl apply -f https://github.com/kubesphere-sigs/ks-releaser/releases/latest/download/install-no-monitor.yaml
+```
 
 ## How to use
 
