@@ -55,6 +55,7 @@ func bumpReleaser(releaser *devopsv1alpha1.Releaser) {
 	releaser.ObjectMeta.Generation = 0
 	releaser.ObjectMeta.SelfLink = ""
 	releaser.ObjectMeta.Annotations = nil
+	releaser.ObjectMeta.ResourceVersion = ""
 
 	releaser.Spec.Phase = devopsv1alpha1.PhaseDraft
 	releaser.Spec.Version = nextVersion

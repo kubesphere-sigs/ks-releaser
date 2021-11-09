@@ -129,6 +129,7 @@ func (r *ReleaserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 
 	if err == nil {
 		releaser.Status.CompletionTime = &metav1.Time{Time: time.Now()}
+		metricsRecord(releaser.DeepCopy())
 	}
 
 	if updateErr := r.Status().Update(ctx, releaser); err == nil && updateErr == nil {
@@ -151,6 +152,9 @@ func (r *ReleaserReconciler) needToUpdate(ctx context.Context, releaser *devopsv
 
 func (r *ReleaserReconciler) updateHash(ctx context.Context, releaser *devopsv1alpha1.Releaser) (err error) {
 	newHash := ComputeHash(releaser.Spec)
+	if releaser.Annotations == nil {
+		releaser.Annotations = make(map[string]string)
+	}
 	releaser.Annotations["releaser.devops.kubesphere.io/hash"] = newHash
 	err = r.Update(ctx, releaser)
 	return
@@ -167,7 +171,14 @@ func (r *ReleaserReconciler) markAsDone(secret *v1.Secret, releaser *devopsv1alp
 	gitOps := releaser.Spec.GitOps
 	if gitOps == nil || !gitOps.Enable {
 		releaser.Spec.Phase = devopsv1alpha1.PhaseDone
-		err = r.Update(context.TODO(), releaser)
+		if err = r.Update(context.TODO(), releaser); err == nil {
+			nextReleaser := releaser.DeepCopy()
+			bumpReleaser(nextReleaser)
+
+			if err = r.Create(context.TODO(), nextReleaser); err != nil {
+				err = fmt.Errorf("failed to create next releaser: %s, error: %v", nextReleaser.GetName(), err)
+			}
+		}
 		return
 	}
 
@@ -221,6 +232,24 @@ func (r *ReleaserReconciler) markAsDone(secret *v1.Secret, releaser *devopsv1alp
 		err = saveAndPush(gitRepo, r.gitUser, bumpFilename, data, secret)
 	}
 	return
+}
+
+func metricsRecord(releaser *devopsv1alpha1.Releaser) {
+	increaseTagActionCount()
+
+	if releaser.Spec.GitOps != nil && releaser.Spec.GitOps.Enable {
+		increaseGitOpsCount()
+	}
+
+	for i, _ := range releaser.Spec.Repositories {
+		repo := releaser.Spec.Repositories[i]
+		switch repo.Action {
+		case devopsv1alpha1.ActionPreRelease:
+			increasePreReleaseActionCount()
+		case devopsv1alpha1.ActionRelease:
+			increaseReleaseActionCount()
+		}
+	}
 }
 
 // addCondition adds or replaces a condition
