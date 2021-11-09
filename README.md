@@ -6,6 +6,7 @@ This project aims to help to release a project which especially has multiple git
 
 * Support to create a tag for a git repository
 * Support to create a release (or pre-release) for [a GitHub repository](docs/github.md)
+* Metrics support for the release action count
 * Support to integrate with GitOps framework (such as [Argo CD](https://github.com/argoproj/argo-cd))
 
 ## Installation
