@@ -66,3 +66,4 @@ release:
   discussion_category_name: General
   extra_files:
     - glob: ./tmp/install.yaml
+    - glob: ./tmp/install-no-monitor.yaml
