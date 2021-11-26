@@ -206,8 +206,8 @@ func (r *ReleaserReconciler) markAsDone(secret *v1.Secret, releaser *devopsv1alp
 		return
 	}
 
-	dir := path.Join(r.GitCacheDir, gitRepoURL.Path)
-	filePath := path.Join(dir, fmt.Sprintf("%s.yaml", releaser.Name))
+	repoDir := path.Join(r.GitCacheDir, gitRepoURL.Path)
+	currentReleaserPath := findReleaserFile(fmt.Sprintf("%s.yaml", releaser.Name), repoDir)
 
 	var data []byte
 	copiedReleaser := releaser.DeepCopy()
@@ -217,19 +217,22 @@ func (r *ReleaserReconciler) markAsDone(secret *v1.Secret, releaser *devopsv1alp
 	copiedReleaser.ObjectMeta.ResourceVersion = ""
 	data, _ = yaml.Marshal(copiedReleaser)
 
+
 	r.logger.Info("start to commit phase to be done", "name", releaser.Name)
-	if err = saveAndPush(gitRepo, r.gitUser, filePath, data, secret); err != nil {
-		err = fmt.Errorf("failed to write file %s, error: %v", filePath, err)
+	if err = saveAndPush(gitRepo, r.gitUser, currentReleaserPath, data, secret,
+		fmt.Sprintf("release %s", releaser.Name)); err != nil {
+		err = fmt.Errorf("failed to write file %s, error: %v", currentReleaserPath, err)
 		return
 	}
 
 	r.logger.Info("start to create next release file")
 	var bumpFilename string
 	if data, bumpFilename, err = bumpReleaserAsData(data); err != nil {
-		err = fmt.Errorf("failed to bump releaser: %s, error: %v", filePath, err)
+		err = fmt.Errorf("failed to bump releaser: %s, error: %v", currentReleaserPath, err)
 	} else {
-		bumpFilename = path.Join(dir, bumpFilename)
-		err = saveAndPush(gitRepo, r.gitUser, bumpFilename, data, secret)
+		bumpFilePath := path.Join(path.Dir(currentReleaserPath), bumpFilename)
+		err = saveAndPush(gitRepo, r.gitUser, bumpFilePath, data, secret,
+			fmt.Sprintf("prepare the next release of %s", releaser.Name))
 	}
 	return
 }
