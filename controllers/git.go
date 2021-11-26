@@ -59,6 +59,14 @@ func addAndCommit(repo *git.Repository, user string) (err error) {
 	return
 }
 
+func getGitProviderClient(repo devopsv1alpha1.Repository, secret *v1.Secret) internal_scm.GitReleaser {
+	token := string(secret.Data[v1.BasicAuthPasswordKey])
+	server := string(secret.Data["server"])
+	orgAndRepo := getOrgAndRepo(repo, server)
+
+	return internal_scm.GetGitProvider(string(repo.Provider), server, orgAndRepo, token)
+}
+
 func release(repo devopsv1alpha1.Repository, secret *v1.Secret, user string) (err error) {
 	auth := getAuth(secret)
 
@@ -81,11 +89,7 @@ func release(repo devopsv1alpha1.Repository, secret *v1.Secret, user string) (er
 		return
 	}
 
-	token := string(secret.Data[v1.BasicAuthPasswordKey])
-	server := string(secret.Data["server"])
-	orgAndRepo := getOrgAndRepo(repo, server)
-
-	provider := internal_scm.GetGitProvider(string(repo.Provider), server, orgAndRepo, token)
+	provider := getGitProviderClient(repo, secret)
 	if provider == nil {
 		return
 	}
@@ -172,6 +176,17 @@ func clone(gitRepo, branch string, auth transport.AuthMethod, cacheDir string) (
 			}
 
 			if wd, err = repo.Worktree(); err == nil {
+				head, _ := repo.Head()
+
+				// avoid force push from remote
+				if err = wd.Reset(&git.ResetOptions{
+					Commit: head.Hash(),
+					Mode:   git.HardReset,
+				}); err != nil {
+					err = fmt.Errorf("unable to reset to '%s'", head.Hash().String())
+					return
+				}
+
 				if err = wd.Checkout(&git.CheckoutOptions{
 					Branch: plumbing.NewBranchReferenceName(branch),
 					Create: false,

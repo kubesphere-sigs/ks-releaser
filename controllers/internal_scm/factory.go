@@ -8,6 +8,7 @@ import (
 
 type GitReleaser interface {
 	Release(version, commitish string, draft, prerelease bool) (err error)
+	CreateIssue(title, body string) (err error)
 }
 
 func release(client *scm.Client, repo, version, commitish string, draft, prerelease bool) (err error) {
