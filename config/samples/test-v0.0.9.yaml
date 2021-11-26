@@ -1,0 +1,16 @@
+apiVersion: devops.kubesphere.io/v1alpha1
+kind: Releaser
+metadata:
+  name: test-v0.0.9
+spec:
+  version: v0.0.9
+  repositories:
+    - name: test
+      address: https://gitee.com/linuxsuren/test.git
+      action: tag
+      branch: master
+      version: v0.0.9
+      provider: gitee
+  secret:
+    name: test-git
+    namespace: default

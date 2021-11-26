@@ -178,6 +178,18 @@ type Releaser struct {
 	Status ReleaserStatus `json:"status,omitempty"`
 }
 
+func (r *Releaser) GetGitOpsSecret() v1.SecretReference {
+	if r.Spec.GitOps == nil {
+		return v1.SecretReference{}
+	}
+
+	if r.Spec.GitOps.Secret.Name != "" {
+		return r.Spec.GitOps.Secret
+	}
+
+	return r.Spec.Secret
+}
+
 //+kubebuilder:object:root=true
 
 // ReleaserList contains a list of Releaser

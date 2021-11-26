@@ -1,6 +1,7 @@
 package internal_scm
 
 import (
+	"fmt"
 	"github.com/jenkins-x/go-scm/scm/driver/gitlab"
 	"github.com/jenkins-x/go-scm/scm/transport"
 	"net/http"
@@ -28,4 +29,8 @@ func (r *Gitlab) Release(version, commitish string, draft, prerelease bool) (err
 	}
 	err = release(client, r.repo, version, commitish, draft, prerelease)
 	return
+}
+
+func (r *Gitlab) CreateIssue(title, body string) (err error) {
+	return fmt.Errorf("not support yet")
 }

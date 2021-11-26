@@ -112,11 +112,7 @@ func (r *ReleaserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 		addCondition(releaser, condition)
 	}
 
-	if err = errSlice.ToError(); err != nil {
-		result = ctrl.Result{
-			RequeueAfter: time.Second * 5,
-		}
-	} else {
+	if err = errSlice.ToError(); err == nil {
 		if err = r.markAsDone(secret, releaser); err != nil {
 			condition := devopsv1alpha1.Condition{
 				ConditionType: devopsv1alpha1.ConditionTypeOther,
@@ -136,6 +132,12 @@ func (r *ReleaserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 		err = r.updateHash(ctx, releaser)
 	} else if err == nil && updateErr != nil {
 		err = updateErr
+	}
+
+	if err != nil {
+		result = ctrl.Result{
+			RequeueAfter: time.Second * 5,
+		}
 	}
 	return
 }

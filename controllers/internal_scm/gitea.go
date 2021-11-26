@@ -31,3 +31,7 @@ func (r *Gitea) Release(version, commitish string, draft, prerelease bool) (err 
 	}
 	return
 }
+
+func (r *Gitea) CreateIssue(title, body string) (err error) {
+	return fmt.Errorf("not support yet")
+}
