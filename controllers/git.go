@@ -27,23 +27,23 @@ TODO make these functions into a struct
 For example, we can share parts of the variables, such as git.Repository, secret .etc.
 */
 
-func saveAndPush(gitRepo *git.Repository, user, targetFile string, data []byte, secret *v1.Secret) (err error) {
+func saveAndPush(gitRepo *git.Repository, user, targetFile string, data []byte, secret *v1.Secret, commitMessage string) (err error) {
 	if err = ioutil.WriteFile(targetFile, data, 0644); err != nil {
 		fmt.Println("failed to write file", targetFile)
 	} else {
-		if err = addAndCommit(gitRepo, user); err == nil {
+		if err = addAndCommit(gitRepo, user, commitMessage); err == nil {
 			err = pushTags(gitRepo, "", getAuth(secret))
 		}
 	}
 	return
 }
 
-func addAndCommit(repo *git.Repository, user string) (err error) {
+func addAndCommit(repo *git.Repository, user, commitMessage string) (err error) {
 	var w *git.Worktree
 	if w, err = repo.Worktree(); err == nil {
 		_, _ = w.Add(".")
 		var commit plumbing.Hash
-		commit, err = w.Commit("example go-git commit", &git.CommitOptions{
+		commit, err = w.Commit(commitMessage, &git.CommitOptions{
 			All: true,
 			Author: &object.Signature{
 				Name:  user,
