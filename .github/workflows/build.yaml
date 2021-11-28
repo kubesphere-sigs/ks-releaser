@@ -25,6 +25,12 @@ jobs:
         with:
           version: latest
           args: release --skip-publish --rm-dist
+      - name: Push image
+        if: github.ref == 'refs/heads/master'
+        run: |
+          docker login ghcr.io --username linuxsuren --password ${{secrets.GH_PUBLISH_SECRETS}}
+          docker tag ghcr.io/kubesphere-sigs/ks-releaser:latest ghcr.io/kubesphere-sigs/ks-releaser:master
+          docker push ghcr.io/kubesphere-sigs/ks-releaser:master
 
   UnitTest:
     name: Test
