@@ -76,11 +76,11 @@ metadata:
   name: releaser-sample
 spec:
   gitOps:
-  enable: true
-  repository:
-    address: https://gitee.com/linuxsuren/linuxsuren-releaser
-    branch: master
-    name: test
+    enable: true
+    repository:
+      address: https://gitee.com/linuxsuren/linuxsuren-releaser
+      branch: master
+      name: test
   repositories:
     - name: test
       address: https://gitee.com/linuxsuren/test
