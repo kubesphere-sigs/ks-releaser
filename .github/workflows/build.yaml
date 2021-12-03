@@ -25,6 +25,16 @@ jobs:
         with:
           version: latest
           args: release --skip-publish --rm-dist
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.2.0
+        if: github.event_name == 'pull_request'
+        with:
+          image-ref: 'ghcr.io/kubesphere-sigs/ks-releaser:latest'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
       - name: Push image
         if: github.ref == 'refs/heads/master'
         run: |
