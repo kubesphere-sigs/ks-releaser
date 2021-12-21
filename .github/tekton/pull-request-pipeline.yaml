@@ -1,0 +1,138 @@
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: ks-releaser-pull-request
+spec:
+  workspaces:
+    - name: repo
+  params:
+    - name: repo-full-name
+      description: "Repository full name. like: kubesphere-sigs/ks-releaser"
+    - name: clone-url
+      description: Repository URL to clone from.
+    - name: revision
+      description: Revision to checkout. (branch, tag, sha, ref, etc...)
+      default: master
+    - name: dashboard-url
+      description: Tekton dashboard access URL, like http://demo:31962/#/namespaces/ks/pipelineruns.
+  tasks:
+    - name: set-running-status
+      taskRef:
+        name: github-set-status
+      params:
+        - name: REPO_FULL_NAME
+          value: $(params.repo-full-name)
+        - name: SHA
+          value: $(params.revision)
+        - name: DESCRIPTION
+          value: Build has started
+        - name: STATE
+          value: pending
+        - name: TARGET_URL
+          value: $(params.dashboard-url)
+    - name: checkout
+      taskRef:
+        name: git-clone
+      params:
+        - name: url
+          value: $(params.clone-url)
+        - name: revision
+          value: $(params.revision)
+      workspaces:
+        - name: output
+          workspace: repo
+    - name: build
+      runAfter:
+        - checkout
+      taskRef:
+        name: goreleaser-and-trivy
+      params:
+        # Goreleaser part
+        - name: package
+          value: github.com/kubesphere-sigs/ks-releaser
+        - name: flags
+          value: --skip-publish --rm-dist --debug --snapshot
+        # Trivy scanner part
+        - name: IMAGE_PATH
+          value: ghcr.io/kubesphere-sigs/ks-releaser:latest
+        - name: ARGS
+          value:
+            - image
+            - --severity HIGH,CRITICAL
+            - --vuln-type os,library
+            - --exit-code 1
+            - --no-progress
+            - --ignore-unfixed
+            - --format table
+      workspaces:
+        - name: source
+          workspace: repo
+    - name: test
+      runAfter:
+        - checkout
+      taskSpec:
+        steps:
+          - name: run-test
+            image: golang:1.16-alpine3.14
+            workingDir: $(workspaces.source.path)
+            script: |
+              apk --no-cache --update add build-base
+              go test ./... -coverprofile coverage.out
+        workspaces:
+          - name: source
+      workspaces:
+        - name: source
+          workspace: repo
+    - name: codecov
+      runAfter:
+        - test
+      taskRef:
+        name: codecov
+      params:
+        - name: args
+          value:
+            - -n codecov-umbrella 
+            - -F unittests 
+            - -Q github-action-v1.5.2
+            - -f coverage.out
+            - -Z 
+      workspaces:
+        - name: source
+          workspace: repo
+  finally:
+    - name: set-pull-request-failure
+      when:
+        - input: $(tasks.status)
+          operator: in
+          values: ["Failed"]
+      taskRef:
+        name: github-set-status
+      params:
+        - name: REPO_FULL_NAME
+          value: $(params.repo-full-name)
+        - name: SHA
+          value: $(params.revision)
+        - name: DESCRIPTION
+          value: Build has failed
+        - name: STATE
+          value: failure
+        - name: TARGET_URL
+          value: $(params.dashboard-url)
+    - name: set-pull-request-success
+      when:
+        - input: $(tasks.status)
+          operator: in
+          values: ["Succeeded", "Completed"]
+      taskRef:
+        name: github-set-status
+      params:
+        - name: REPO_FULL_NAME
+          value: $(params.repo-full-name)
+        - name: SHA
+          value: $(params.revision)
+        - name: DESCRIPTION
+          value: Build has executed successfully
+        - name: STATE
+          value: success
+        - name: TARGET_URL
+          value: $(params.dashboard-url)
