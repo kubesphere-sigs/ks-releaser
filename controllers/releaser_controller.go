@@ -219,7 +219,6 @@ func (r *ReleaserReconciler) markAsDone(secret *v1.Secret, releaser *devopsv1alp
 	copiedReleaser.ObjectMeta.ResourceVersion = ""
 	data, _ = yaml.Marshal(copiedReleaser)
 
-
 	r.logger.Info("start to commit phase to be done", "name", releaser.Name)
 	if err = saveAndPush(gitRepo, r.gitUser, currentReleaserPath, data, secret,
 		fmt.Sprintf("release %s", releaser.Name)); err != nil {

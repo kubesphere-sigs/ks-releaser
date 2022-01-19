@@ -37,7 +37,7 @@ func TestErrorReportRender(t *testing.T) {
 	message, err = errorReportRender(&v1alpha1.Releaser{Status: v1alpha1.ReleaserStatus{Conditions: []v1alpha1.Condition{{
 		ConditionType: v1alpha1.ConditionTypeOther,
 		Status:        v1alpha1.ConditionStatusFailed,
-		Message:       `
+		Message: `
 message
 `,
 	}}}})
