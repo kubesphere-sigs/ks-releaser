@@ -29,7 +29,7 @@ spec:
           - name: repo-full-name
             value: $(tt.params.repo-full-name)
           - name: dashboard-url
-            value: $(tt.params.dashboard-url)/ks-releaser-pull-request-$(tt.params.pull-request-number)-$(uid)
+            value: $(tt.params.dashboard-url)/ks-releaser-pr-$(tt.params.pull-request-number)-$(uid)
         workspaces:
           - name: repo
             persistentVolumeClaim:
