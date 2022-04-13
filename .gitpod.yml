@@ -1,0 +1,6 @@
+tasks:
+  - init: |
+      curl -L https://github.com/linuxsuren/http-downloader/releases/latest/download/hd-linux-amd64.tar.gz | tar xzv
+      git checkout README.md
+      sudo install hd /usr/bin
+      hd install upx
