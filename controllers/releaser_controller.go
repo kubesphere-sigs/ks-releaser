@@ -29,7 +29,6 @@ import (
 	"sigs.k8s.io/yaml"
 	"time"
 
-	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -41,7 +40,6 @@ import (
 type ReleaserReconciler struct {
 	logger logr.Logger
 	client.Client
-	Scheme      *runtime.Scheme
 	GitCacheDir string
 
 	gitUser string
@@ -169,18 +167,41 @@ func (r *ReleaserReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
+func (r *ReleaserReconciler) bumpResource(releaser *devopsv1alpha1.Releaser) (err error) {
+	ctx := context.Background()
+	releaser.Spec.Phase = devopsv1alpha1.PhaseDone
+	if err = r.Update(context.TODO(), releaser); err == nil {
+		nextReleaser := releaser.DeepCopy()
+		isPre := bumpReleaser(nextReleaser, true)
+
+		if err = r.Create(ctx, nextReleaser); err != nil {
+			err = fmt.Errorf("failed to create next releaser: %s, error: %v", nextReleaser.GetName(), err)
+		}
+
+		if err == nil && isPre {
+			nextReleaserWithoutPre := releaser.DeepCopy()
+			bumpReleaser(nextReleaserWithoutPre, false)
+
+			err = r.Get(ctx, types.NamespacedName{
+				Namespace: nextReleaserWithoutPre.Namespace,
+				Name:      nextReleaserWithoutPre.Name,
+			}, &devopsv1alpha1.Releaser{})
+			if err != nil {
+				if client.IgnoreNotFound(err) == nil {
+					if err = r.Create(ctx, nextReleaserWithoutPre); err != nil {
+						err = fmt.Errorf("failed to create next releaser: %s, error: %v", nextReleaserWithoutPre.GetName(), err)
+					}
+				}
+			}
+		}
+	}
+	return
+}
+
 func (r *ReleaserReconciler) markAsDone(secret *v1.Secret, releaser *devopsv1alpha1.Releaser) (err error) {
 	gitOps := releaser.Spec.GitOps
 	if gitOps == nil || !gitOps.Enable {
-		releaser.Spec.Phase = devopsv1alpha1.PhaseDone
-		if err = r.Update(context.TODO(), releaser); err == nil {
-			nextReleaser := releaser.DeepCopy()
-			bumpReleaser(nextReleaser)
-
-			if err = r.Create(context.TODO(), nextReleaser); err != nil {
-				err = fmt.Errorf("failed to create next releaser: %s, error: %v", nextReleaser.GetName(), err)
-			}
-		}
+		err = r.bumpResource(releaser)
 		return
 	}
 
@@ -219,7 +240,6 @@ func (r *ReleaserReconciler) markAsDone(secret *v1.Secret, releaser *devopsv1alp
 	copiedReleaser.ObjectMeta.ResourceVersion = ""
 	data, _ = yaml.Marshal(copiedReleaser)
 
-
 	r.logger.Info("start to commit phase to be done", "name", releaser.Name)
 	if err = saveAndPush(gitRepo, r.gitUser, currentReleaserPath, data, secret,
 		fmt.Sprintf("release %s", releaser.Name)); err != nil {
@@ -229,12 +249,27 @@ func (r *ReleaserReconciler) markAsDone(secret *v1.Secret, releaser *devopsv1alp
 
 	r.logger.Info("start to create next release file")
 	var bumpFilename string
-	if data, bumpFilename, err = bumpReleaserAsData(data); err != nil {
+	var isPre bool
+	if data, bumpFilename, isPre, err = bumpReleaserAsData(data, true); err != nil {
 		err = fmt.Errorf("failed to bump releaser: %s, error: %v", currentReleaserPath, err)
 	} else {
 		bumpFilePath := path.Join(path.Dir(currentReleaserPath), bumpFilename)
 		err = saveAndPush(gitRepo, r.gitUser, bumpFilePath, data, secret,
 			fmt.Sprintf("prepare the next release of %s", releaser.Name))
+	}
+
+	// try to prepare the next version which is not a preRlease
+	if err == nil && isPre {
+		if data, bumpFilename, _, err = bumpReleaserAsData(data, false); err != nil {
+			err = fmt.Errorf("failed to bump releaser: %s, error: %v", currentReleaserPath, err)
+		} else {
+			bumpFilePath := path.Join(path.Dir(currentReleaserPath), bumpFilename)
+			if ok, _ := PathExists(bumpFilePath); !ok {
+				err = saveAndPush(gitRepo, r.gitUser, bumpFilePath, data, secret,
+					fmt.Sprintf("prepare the next release of %s", releaser.Name))
+			}
+		}
+
 	}
 	return
 }
