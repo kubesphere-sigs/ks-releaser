@@ -15,7 +15,7 @@ func isPreRelease(versionStr string) bool {
 	return false
 }
 
-func bumpVersion(versionStr string) (nextVersion string, err error) {
+func bumpVersionTo(versionStr string, remainPre bool) (nextVersion string, isPre bool, err error) {
 	nextVersion = versionStr // keep using the old version if there's any problem happened
 
 	var version semver.Version
@@ -25,12 +25,17 @@ func bumpVersion(versionStr string) (nextVersion string, err error) {
 	}
 
 	if preVersionCount := len(version.Pre); preVersionCount > 0 {
-		for i := preVersionCount - 1; i >= 0; i-- {
-			preVersion := &version.Pre[i]
-			if preVersion.IsNumeric() {
-				preVersion.VersionNum += 1
-				break
+		isPre = true
+		if remainPre {
+			for i := preVersionCount - 1; i >= 0; i-- {
+				preVersion := &version.Pre[i]
+				if preVersion.IsNumeric() {
+					preVersion.VersionNum += 1
+					break
+				}
 			}
+		} else {
+			version.Pre = nil
 		}
 	} else {
 		version.Patch += 1
@@ -43,9 +48,16 @@ func bumpVersion(versionStr string) (nextVersion string, err error) {
 	return
 }
 
-func bumpReleaser(releaser *devopsv1alpha1.Releaser) {
+func bumpVersion(versionStr string) (nextVersion string, isPre bool, err error) {
+	nextVersion, isPre, err = bumpVersionTo(versionStr, true)
+	return
+}
+
+func bumpReleaser(releaser *devopsv1alpha1.Releaser, remainPre bool) (isPre bool) {
+	var nextVersion string
+
 	currentVersion := releaser.Spec.Version
-	nextVersion, _ := bumpVersion(currentVersion)
+	nextVersion, isPre, _ = bumpVersionTo(currentVersion, remainPre)
 	if strings.HasSuffix(releaser.Name, currentVersion) {
 		nameWithoutVersion := strings.ReplaceAll(releaser.Name, currentVersion, "")
 		releaser.Name = nameWithoutVersion + nextVersion
@@ -62,7 +74,7 @@ func bumpReleaser(releaser *devopsv1alpha1.Releaser) {
 
 	for i, _ := range releaser.Spec.Repositories {
 		repo := &releaser.Spec.Repositories[i]
-		repo.Version, _ = bumpVersion(repo.Version)
+		repo.Version, _, _ = bumpVersionTo(repo.Version, remainPre)
 	}
 
 	// remove status
@@ -70,10 +82,10 @@ func bumpReleaser(releaser *devopsv1alpha1.Releaser) {
 	return
 }
 
-func bumpReleaserAsData(data []byte) (result []byte, filename string, err error) {
+func bumpReleaserAsData(data []byte, remainPre bool) (result []byte, filename string, isPre bool, err error) {
 	targetReleaser := &devopsv1alpha1.Releaser{}
 	if err = yaml.Unmarshal(data, targetReleaser); err == nil {
-		bumpReleaser(targetReleaser)
+		isPre = bumpReleaser(targetReleaser, remainPre)
 		filename = targetReleaser.Name + ".yaml"
 		result, err = yaml.Marshal(targetReleaser)
 	}

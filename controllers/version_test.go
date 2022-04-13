@@ -67,7 +67,7 @@ func TestVersionBump(t *testing.T) {
 	for i, _ := range testCases {
 		caseItem := testCases[i]
 
-		nextVersion, err := bumpVersion(caseItem.arg.version)
+		nextVersion, _, err := bumpVersion(caseItem.arg.version)
 		if caseItem.wantErr {
 			assert.NotNil(t, err, fmt.Sprintf("test failed with case[%d]", i))
 		}
@@ -137,7 +137,7 @@ func Test_bumpReleaser(t *testing.T) {
 	}}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			bumpReleaser(tt.args.releaser)
+			bumpReleaser(tt.args.releaser, true)
 			if !reflect.DeepEqual(tt.args.releaser, tt.wantResult) {
 				t.Errorf("bumpReleaser() gotResult = %v, want %v", tt.args.releaser, tt.wantResult)
 			}
@@ -180,7 +180,7 @@ status: {}
 	}}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotResult, _, err := bumpReleaserAsData([]byte(tt.args.data))
+			gotResult, _, _, err := bumpReleaserAsData([]byte(tt.args.data), true)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("bumpReleaserAsData() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -237,5 +237,41 @@ func Test_isPreRelease(t *testing.T) {
 				t.Errorf("isPreRelease() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func Test_bumpVersionTo(t *testing.T) {
+	type testCase struct {
+		name string
+		arg  struct {
+			version   string
+			remainPre bool
+		}
+		wantErr     bool
+		wantVersion string
+	}
+
+	testCases := []testCase{{
+		name: "version with rc tail",
+		arg: struct {
+			version   string
+			remainPre bool
+		}{
+			version:   "v1.2.0-rc.0",
+			remainPre: false,
+		},
+		wantErr:     false,
+		wantVersion: "v1.2.0",
+	}}
+
+	for i, _ := range testCases {
+		caseItem := testCases[i]
+
+		nextVersion, _, err := bumpVersionTo(caseItem.arg.version, caseItem.arg.remainPre)
+		if caseItem.wantErr {
+			assert.NotNil(t, err, fmt.Sprintf("test failed with case[%d]", i))
+		}
+
+		assert.Equal(t, caseItem.wantVersion, nextVersion, fmt.Sprintf("test failed with case[%d]", i))
 	}
 }
