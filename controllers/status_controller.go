@@ -59,6 +59,11 @@ func (c *StatusController) Reconcile(ctx context.Context, req ctrl.Request) (res
 		return
 	}
 
+	// do not report the status when the phase was done
+	if releaser.Spec.Phase == devopsv1alpha1.PhaseDone {
+		return
+	}
+
 	// only take care of those have errors
 	failedConditions := getFailedConditions(releaser.Status.Conditions)
 	if len(failedConditions) == 0 {
