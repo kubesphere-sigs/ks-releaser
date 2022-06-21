@@ -16,4 +16,3 @@ func findReleaserFile(name, dir string) (result string) {
 	})
 	return
 }
-
