@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
       - name: Set up Go 1.16
-        uses: actions/setup-go@v2.1.5
+        uses: actions/setup-go@v3.4.0
         with:
           go-version: 1.16
         id: go
@@ -47,7 +47,7 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
       - name: Set up Go 1.16
-        uses: actions/setup-go@v2.1.5
+        uses: actions/setup-go@v3.4.0
         with:
           go-version: 1.16
         id: go
